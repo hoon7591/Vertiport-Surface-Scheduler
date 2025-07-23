@@ -10,8 +10,10 @@ def visualize_result(instance, solution):
     num_buffer_in = instance.num_buffer_in
     num_gate = instance.num_gate
     num_buffer_out = instance.num_buffer_out
-    proc_nominal = instance.proc_nominal
-    proc_width = instance.proc_width
+    proc_air_v = instance.proc_air_v
+    proc_air_r = instance.proc_air_r
+    proc_air_o = instance.proc_air_o
+    proc_gate_v = instance.proc_gate_v
     st_list = instance.st_list
     ready_max = instance.ready_max
     ETA_ready_diff = instance.ETA_ready_diff
@@ -61,13 +63,13 @@ def visualize_result(instance, solution):
             y = res
 
             # Draw main operation bar
-            ax.barh(y, duration, left=start, height=0.4, color=colors[o], edgecolor='black')
+            ax.barh(y, duration, left=start, height=0.4, color=colors[o], edgecolor='black', zorder=1)
 
             # Draw waiting bar
             if o != 4:
                 waiting_duration = start_time_arr[v][o + 1] - finish
                 if waiting_duration > 0:
-                    ax.barh(y, waiting_duration, left=finish, height=0.4, color='gray', edgecolor='black')
+                    ax.barh(y, waiting_duration, left=finish, height=0.4, color='gray', edgecolor='black', zorder=1)
                     ax.text(start_time_arr[v][o + 1], y, f'{start_time_arr[v][o + 1]:.1f}', ha='left', va='center', fontsize=7, color='black')
 
             # Vehicle ID centered
@@ -84,14 +86,14 @@ def visualize_result(instance, solution):
             landing_res = int(assigned_res_arr[v][0])
             landing_end = finish_time_arr[v][0]
             ax.barh(landing_res, arrival_tar_arr[v], left=landing_end - arrival_tar_arr[v],
-                    height=0.4, edgecolor=tardiness_color, facecolor='none', hatch='//', linewidth=1.2)
+                    height=0.4, edgecolor=tardiness_color, facecolor='none', hatch='//', linewidth=1.2, zorder=2)
 
         # Departure Tardiness (after takeoff)
         if departure_tar_arr[v] > 0:
             takeoff_res = int(assigned_res_arr[v][4])
             takeoff_end = finish_time_arr[v][4]
             ax.barh(takeoff_res, departure_tar_arr[v], left=due_d[v],
-                    height=0.4, edgecolor=tardiness_color, facecolor='none', hatch='//', linewidth=1.2)
+                    height=0.4, edgecolor=tardiness_color, facecolor='none', hatch='//', linewidth=1.2, zorder=2)
 
         for v in range(num_vehicle):
             landing_res = int(assigned_res_arr[v][0])
