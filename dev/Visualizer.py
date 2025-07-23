@@ -63,6 +63,13 @@ def visualize_result(instance, solution):
             # Draw main operation bar
             ax.barh(y, duration, left=start, height=0.4, color=colors[o], edgecolor='black')
 
+            # Draw waiting bar
+            if o != 4:
+                waiting_duration = start_time_arr[v][o + 1] - finish
+                if waiting_duration > 0:
+                    ax.barh(y, waiting_duration, left=finish, height=0.4, color='gray', edgecolor='black')
+                    ax.text(start_time_arr[v][o + 1], y, f'{start_time_arr[v][o + 1]:.1f}', ha='left', va='center', fontsize=7, color='black')
+
             # Vehicle ID centered
             ax.text(start + duration / 2, y, f'V{v}\nP:{duration:.1f}\ntype{vehicle_type[v]}', ha='center', va='center', fontsize=7, color='black')
 
@@ -104,8 +111,8 @@ def visualize_result(instance, solution):
 
             # Ready marker on Landing row
             ax.vlines(ready[v], ymin=y_landing - 0.2, ymax=y_landing + 0.2,
-                      color='gray', linestyle=':', alpha=0.6)
-            ax.text(ready[v], y_landing - 0.3, f"Ready\nV{v}", fontsize=7, color='gray', ha='center')
+                      color='darkmagenta', linestyle=':', alpha=0.6)
+            ax.text(ready[v], y_landing - 0.3, f"Ready\nV{v}", fontsize=7, color='darkmagenta', ha='center')
 
     # Axis settings
     ax.set_yticks(yticks)
@@ -119,10 +126,7 @@ def visualize_result(instance, solution):
     # Legend
     legend_ops = [mpatches.Patch(color=colors[i], label=operation_labels[i]) for i in range(num_ops)]
     legend_ops += [
-        mpatches.Patch(color=tardiness_color, label='Tardiness', alpha=0.5),
-        mpatches.Patch(color='blue', label='ETA', alpha=0.3),
-        mpatches.Patch(color='red', label='ETD', alpha=0.3),
-        mpatches.Patch(color='gray', label='Ready', alpha=0.3),
+        mpatches.Patch(color='gray', label='Waiting', alpha=0.5),
         mpatches.Patch(facecolor='white', edgecolor=tardiness_color, hatch='//', label='Tardiness')
     ]
     ax.legend(handles=legend_ops, loc='upper right')
