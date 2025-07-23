@@ -4,6 +4,7 @@ import matplotlib.patches as mpatches
 
 def visualize_result(instance, solution):
     num_ops = instance.num_ops
+    num_resource = instance.num_resource
     num_vehicle = instance.num_vehicle
     num_pad = instance.num_pad
     num_buffer_in = instance.num_buffer_in
@@ -32,7 +33,6 @@ def visualize_result(instance, solution):
     departure_tar_arr = solution.departure_tar_arr
     resource_ind = solution.resource_ind
 
-    num_resource = num_pad + num_buffer_in + num_gate + num_buffer_out
     fig, ax = plt.subplots(figsize=(20, 12))
     colors = ['#66c2a5', '#fc8d62', '#8da0cb', '#e78ac3', '#a6d854']
     operation_labels = ['Landing', 'Buffer-In', 'Gate', 'Buffer-Out', 'Take-Off']

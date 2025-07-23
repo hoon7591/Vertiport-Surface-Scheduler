@@ -20,6 +20,7 @@ def solve(instance: Instance) -> Solution:
     due_d = instance.due_d
     ST = instance.ST
     M = instance.M
+    unified_buffer = instance.unified_buffer
 
     # Initialize Model
     model = Model("Vertiport_Surface_Scheduler")
@@ -39,8 +40,16 @@ def solve(instance: Instance) -> Solution:
     model.setObjective(quicksum(weights[0] * T_a[i] + weights[1] * T_d[i] for i in range(num_vehicle)), GRB.MINIMIZE)
 
     # Set Constraints
-    resource_ind = [[0, num_pad], [num_pad, num_pad + num_buffer_in], [num_pad + num_buffer_in, num_pad + num_buffer_in + num_gate],
-                    [num_pad + num_buffer_in + num_gate, num_pad + num_buffer_in + num_gate + num_buffer_out], [0, num_pad]]            # [landing, buffer_in, gate, buffer_outm takeoff]
+    if unified_buffer:
+        resource_ind = [[0, num_pad], [num_pad, num_pad + num_buffer_in],
+                       [num_pad + num_buffer_in, num_pad + num_buffer_in + num_gate],
+                       [num_pad, num_pad + num_buffer_in],
+                       [0, num_pad]]  # [landing, buffer_in, gate, buffer_out, takeoff]
+    else:
+        resource_ind = [[0, num_pad], [num_pad, num_pad + num_buffer_in],
+                        [num_pad + num_buffer_in, num_pad + num_buffer_in + num_gate],
+                        [num_pad + num_buffer_in + num_gate, num_pad + num_buffer_in + num_gate + num_buffer_out],
+                        [0, num_pad]]  # [landing, buffer_in, gate, buffer_out, takeoff]
 
     # Const. 1: Vehicle Assignment
     for i in range(num_ops):

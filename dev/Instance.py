@@ -30,6 +30,7 @@ ready_max: maximum of ready time
 ETA_ready_diff: ETA(=due_a) - ready for all vehicles (1D list)
                 [nominal, width] (width/2 corresponds to 2-sigma deviation of normal distribution; 95.45% of values are within this range from nominal value)
 ETD_margin: ETD(=due_d) = ETA + TAT + "ETD_margin"
+unified_buffer: If True, buffer_in and buffer_out are unified into a single buffer
 """
 
 
@@ -76,6 +77,7 @@ class InstanceConfig:
     ready_max: float = 100.0
     ETA_ready_diff: List[float] = field(default_factory=lambda: [3, 10])
     ETD_margin: float = 5.0
+    unified_buffer: bool = False
 
 
 class Instance:
@@ -96,6 +98,7 @@ class Instance:
         ready_max: float,
         ETA_ready_diff: List[float],
         ETD_margin: float,
+        unified_buffer: bool,
         ready: np.ndarray,
         proc: list,
         due_a: np.ndarray,
@@ -119,6 +122,7 @@ class Instance:
         self.ready_max = ready_max
         self.ETA_ready_diff = ETA_ready_diff
         self.ETD_margin = ETD_margin
+        self.unified_buffer = unified_buffer
         self.ready = ready
         self.proc = proc
         self.due_a = due_a
@@ -130,7 +134,10 @@ class Instance:
     @classmethod
     def from_config(cls, config: "InstanceConfig") -> "Instance":
         np.random.seed(config.seed)
-        num_resource = config.num_pad + config.num_buffer_in + config.num_gate + config.num_buffer_out
+        if config.unified_buffer:
+            num_resource = config.num_pad + config.num_buffer_in + config.num_gate
+        else:
+            num_resource = config.num_pad + config.num_buffer_in + config.num_gate + config.num_buffer_out
 
         # Build st_list from config
         st_list = [
@@ -208,5 +215,5 @@ class Instance:
         return cls(
             config.seed, config.num_ops, config.num_vehicle, config.num_pad, config.num_buffer_in, config.num_gate, config.num_buffer_out,
             num_resource, config.weights, config.proc_nominal, config.proc_width, st_list, config.ready_max, config.ETA_ready_diff, config.ETD_margin,
-            ready, proc, due_a, due_d, ST_rounded, vehicle_type, M
+            config.unified_buffer, ready, proc, due_a, due_d, ST_rounded, vehicle_type, M
         )

@@ -31,6 +31,7 @@ ready_max: maximum of ready time
 ETA_ready_diff: ETA(=due_a) - ready for all vehicles (1D list)
                 [nominal, width] (width/2 corresponds to 2-sigma deviation of normal distribution; 95.45% of values are within this range from nominal value)
 ETD_margin: ETD(=due_d) = ETA + TAT + "ETD_margin"
+unified_buffer: If True, buffer_in and buffer_out are unified into a single buffer
 """
 
 
@@ -56,7 +57,7 @@ M: big-M in formulation
 
 if __name__ == "__main__":
     print("This is a module for solving optimization problems using Gurobi.")
-    config = InstanceConfig(ready_max=90.0)  # Example: override defaults
+    config = InstanceConfig(ready_max=90.0, unified_buffer=False)  # Example: override defaults
     instance = generate_instance(config)
     solution = solve(instance)
     visualize_result(instance, solution)
