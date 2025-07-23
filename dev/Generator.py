@@ -1,4 +1,5 @@
 import numpy as np
+from Instance import Instance, InstanceConfig
 
 
 """
@@ -83,73 +84,5 @@ M: big-M in formulation
 """
 
 
-def generate_instance(seed, num_ops, num_vehicle, num_pad, num_buffer_in, num_gate, num_buffer_out, proc_nominal,
-                      proc_width, st_list, ready_max, ETA_ready_diff, ETD_margin):
-    np.random.seed(seed)
-
-    ready = np.random.uniform(low=0.0, high=ready_max, size=num_vehicle)
-
-    proc_landing = np.random.uniform(low=proc_nominal[0] - proc_width[0] / 2, high=proc_nominal[0] + proc_width[0] / 2,
-                                     size=(num_vehicle, num_pad))
-    proc_buffer_in = np.zeros((num_vehicle, num_buffer_in))
-    # proc_buffer_in = np.random.uniform(low=proc_nominal[1] - proc_width[1] / 2, high=proc_nominal[1] + proc_width[1] / 2,
-    #                                    size=(num_vehicle, num_buffer_in))
-    proc_gate = np.zeros((num_vehicle, num_gate))
-    TAT = np.zeros(num_vehicle)
-    for i in range(num_vehicle):
-        proc_gate[i][0] = np.random.uniform(low=proc_nominal[2] - proc_width[2] / 2, high=proc_nominal[2] + proc_width[2] / 2)
-        TAT[i] = proc_gate[i][0]
-    for i in range(num_vehicle):
-        for j in range(num_gate):
-            proc_gate[i][j] = proc_gate[i][0] + 0.15 * (j + 1)
-    proc_buffer_out = np.zeros((num_vehicle, num_buffer_out))
-    # proc_buffer_out = np.random.uniform(low=proc_nominal[3]-proc_width[3]/2, high=proc_nominal[3]+proc_width[3]/2,
-    #                                     size=(num_vehicle, num_buffer_out))
-    proc_takeoff = np.random.uniform(low=proc_nominal[4] - proc_width[4] / 2, high=proc_nominal[4] + proc_width[4] / 2,
-                                     size=(num_vehicle, num_pad))
-    proc = [proc_landing, proc_buffer_in, proc_gate, proc_buffer_out, proc_takeoff]
-
-    ETA_ready_diff_arr = ETA_ready_diff[0] + ETA_ready_diff[0] / 2 * np.random.randn(num_vehicle)
-    due_a = ready + ETA_ready_diff_arr         # ETA
-
-    due_d = due_a + TAT + ETD_margin            # ETD
-
-    vehicle_type = np.random.randint(0, 4, num_vehicle)
-
-    # Map o indices (0,1,2,3) to new keys
-    o_key_map = {
-        0: (0, 0),
-        1: (0, num_ops - 1),
-        2: (num_ops - 1, 0),
-        3: (num_ops - 1, num_ops - 1)
-    }
-    ST = {}  # New dict with keys as tuples (1,1), (1,5), ...
-    for o in range(len(st_list)):
-        key = o_key_map[o]
-        ST[key] = []
-        for i in range(num_vehicle):
-            row = []
-            v_i = vehicle_type[i]
-            for j in range(num_vehicle):
-                v_j = vehicle_type[j]
-                row.append(st_list[o][v_i][v_j])  # This is a list of length len(st_list_r)
-            ST[key].append(row)
-
-    def round_nested_list(lst, digits=2):
-        if isinstance(lst, list):
-            return [round_nested_list(x, digits) for x in lst]
-        elif isinstance(lst, float):
-            return round(lst, digits)
-        else:
-            return lst
-
-    ST_rounded = {k: round_nested_list(v, digits=2) for k, v in ST.items()}
-
-    # M = proc_landing.sum() + proc_gate.sum() + proc_takeoff.sum()
-    M = ready_max + proc_landing.sum() / num_pad + proc_gate.sum() / num_gate + proc_takeoff.sum() / num_pad
-
-    return ready, proc, due_a, due_d, ST_rounded, vehicle_type, M
-
-# seed, num_ops, num_vehicle, num_pad, num_buffer_in, num_gate, num_buffer_out, num_resource, weights, proc_nominal, proc_width, st_list, ready_max, ETA_ready_diff, ETD_margin = hyper_param_setting()
-# ready, proc, due_a, due_d, ST, vehicle_type, M = generate_instance(seed, num_ops, num_vehicle, num_pad, num_buffer_in, num_gate, num_buffer_out, proc_nominal, proc_width, st_list, ready_max, ETA_ready_diff, ETD_margin)
-# print(ST)
+def generate_instance(config: InstanceConfig = InstanceConfig()) -> Instance:
+    return Instance.from_config(config)

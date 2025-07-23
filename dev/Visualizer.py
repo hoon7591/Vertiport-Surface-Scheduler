@@ -2,11 +2,35 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
 
-def visualize_result(num_ops, num_vehicle, num_pad, num_buffer_in, num_gate, num_buffer_out,
-                     proc_nominal, proc_width, st_list, ready_max, ETA_ready_diff, ETD_margin,
-                     ready, proc, due_a, due_d, ST, vehicle_type, M,
-                     Obj, Gurobi_Runtime, start_time_arr, finish_time_arr, assigned_res_arr,
-                     arrival_tar_arr, departure_tar_arr, resource_ind):
+def visualize_result(instance, solution):
+    num_ops = instance.num_ops
+    num_vehicle = instance.num_vehicle
+    num_pad = instance.num_pad
+    num_buffer_in = instance.num_buffer_in
+    num_gate = instance.num_gate
+    num_buffer_out = instance.num_buffer_out
+    proc_nominal = instance.proc_nominal
+    proc_width = instance.proc_width
+    st_list = instance.st_list
+    ready_max = instance.ready_max
+    ETA_ready_diff = instance.ETA_ready_diff
+    ETD_margin = instance.ETD_margin
+    ready = instance.ready
+    proc = instance.proc
+    due_a = instance.due_a
+    due_d = instance.due_d
+    ST = instance.ST
+    vehicle_type = instance.vehicle_type
+    M = instance.M
+
+    Obj = solution.Obj
+    Gurobi_Runtime = solution.Gurobi_Runtime
+    start_time_arr = solution.start_time_arr
+    finish_time_arr = solution.finish_time_arr
+    assigned_res_arr = solution.assigned_res_arr
+    arrival_tar_arr = solution.arrival_tar_arr
+    departure_tar_arr = solution.departure_tar_arr
+    resource_ind = solution.resource_ind
 
     num_resource = num_pad + num_buffer_in + num_gate + num_buffer_out
     fig, ax = plt.subplots(figsize=(20, 12))

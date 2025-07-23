@@ -1,15 +1,25 @@
 from gurobipy import GRB, Model, quicksum
 import numpy as np
+from Solution import Solution
+from Instance import Instance
 
 
-"""
-solve_prev: previous version without GPT
-solve: improved version (7sec -> 6sec) from GPT
-"""
-
-
-def solve(seed, num_ops, num_vehicle, num_pad, num_buffer_in, num_gate, num_buffer_out, num_resource, weights,
-          ready, proc, due_a, due_d, ST, M):
+def solve(instance: Instance) -> Solution:
+    seed = instance.seed
+    num_ops = instance.num_ops
+    num_vehicle = instance.num_vehicle
+    num_pad = instance.num_pad
+    num_buffer_in = instance.num_buffer_in
+    num_gate = instance.num_gate
+    num_buffer_out = instance.num_buffer_out
+    num_resource = instance.num_resource
+    weights = instance.weights
+    ready = instance.ready
+    proc = instance.proc
+    due_a = instance.due_a
+    due_d = instance.due_d
+    ST = instance.ST
+    M = instance.M
 
     # Initialize Model
     model = Model("Vertiport_Surface_Scheduler")
@@ -104,4 +114,4 @@ def solve(seed, num_ops, num_vehicle, num_pad, num_buffer_in, num_gate, num_buff
                     finish_time_arr[i, j] += proc[j][i][k - resource_ind[j][0]]
                     assigned_res_arr[i, j] = k
 
-    return Obj, Gurobi_Runtime, start_time_arr, finish_time_arr, assigned_res_arr, arrival_tar_arr, departure_tar_arr, resource_ind
+    return Solution(Obj, Gurobi_Runtime, start_time_arr, finish_time_arr, assigned_res_arr, arrival_tar_arr, departure_tar_arr, resource_ind)
