@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 """
 Hyper Parameter Lists for Problem Generation in InstanceConfig
 seed: for fixing random seed
-num_ops: number of operations in the vertiport service
+num_ops: number of operations in the vertiport service (depending on the existence of buffer_in and buffer_out, the num_ops can be 3, 4, or 5)
 num_vehicle: number of UAMs supposed to use vertiport
 num_pad: number of pads for landing and take-off in vertiport
 num_buffer_in: capacity of waiting space before occupying a gate
@@ -71,10 +71,10 @@ class InstanceConfig:
     proc_air_o: List[float] = field(default_factory=lambda: [1.2, 1.0])
     proc_gate_v: List[int] = field(default_factory=lambda: [15, 17, 23, 25])
     st_list_v: Any = field(default_factory=lambda: [
-        [1.5, 1, 1, 1],
-        [2, 1.5, 1, 1],
-        [2.5, 2, 1.5, 1],
-        [3, 2.5, 1.5, 1.5]
+        [1.25, 1.0, 1.0, 1.0],
+        [1.5, 1.25, 1.0, 1.0],
+        [1.75, 1.5, 1.25, 1.0],
+        [2.0, 2.5, 1.25, 1.25]
     ])
     st_list_o: List[float] = field(default_factory=lambda: [0.8, 0.6, 0.5, 1.0])
     st_list_r: List[float] = field(default_factory=lambda: [1.0, 0.7])
@@ -147,6 +147,12 @@ class Instance:
         else:
             num_resource = config.num_pad + config.num_buffer_in + config.num_gate + config.num_buffer_out
 
+        if config.unified_buffer:
+            if config.num_buffer_in == 0:
+                config.num_buffer_out = config.num_buffer_in
+            elif config.num_buffer_out == 0:
+                config.num_buffer_in = config.num_buffer_out
+
         # Build st_list from config
         st_list = [
             [
@@ -167,7 +173,9 @@ class Instance:
             for j in range(config.num_pad):
                 proc_landing[i][j] = config.proc_air_o[0] * config.proc_air_v[vehicle_type[i]] * config.proc_air_r[j]
 
-        proc_buffer_in = np.zeros((config.num_vehicle, config.num_buffer_in))
+        if config.num_buffer_in > 0:
+            proc_buffer_in = np.zeros((config.num_vehicle, config.num_buffer_in))
+
         proc_gate = np.zeros((config.num_vehicle, config.num_gate))
         TAT = np.zeros(config.num_vehicle)
         for i in range(config.num_vehicle):
@@ -177,13 +185,24 @@ class Instance:
             for j in range(config.num_gate):
                 proc_gate[i][j] = proc_gate[i][0] + 0.15 * (j + 1)
 
-        proc_buffer_out = np.zeros((config.num_vehicle, config.num_buffer_out))
+        if config.num_buffer_out > 0:
+            proc_buffer_out = np.zeros((config.num_vehicle, config.num_buffer_out))
+
         proc_takeoff = np.zeros((config.num_vehicle, config.num_pad))
         for i in range(config.num_vehicle):
             for j in range(config.num_pad):
                 proc_takeoff[i][j] = config.proc_air_o[1] * config.proc_air_v[vehicle_type[i]] * config.proc_air_r[j]
 
-        proc = [proc_landing, proc_buffer_in, proc_gate, proc_buffer_out, proc_takeoff]
+        if config.num_buffer_in == 0:
+            if config.num_buffer_out == 0:
+                proc = [proc_landing, proc_gate, proc_takeoff]
+            else:
+                proc = [proc_landing, proc_gate, proc_buffer_out, proc_takeoff]
+        else:
+            if config.num_buffer_out == 0:
+                proc = [proc_landing, proc_buffer_in, proc_gate, proc_takeoff]
+            else:
+                proc = [proc_landing, proc_buffer_in, proc_gate, proc_buffer_out, proc_takeoff]
 
         ETA_ready_diff_arr = config.ETA_ready_diff[0] + config.ETA_ready_diff[0] / 4 * np.random.randn(config.num_vehicle)
         due_a = ready + ETA_ready_diff_arr

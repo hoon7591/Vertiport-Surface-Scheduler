@@ -7,7 +7,7 @@ from Instance import InstanceConfig
 """
 Hyper Parameter Lists for Problem Generation in InstanceConfig
 seed: for fixing random seed
-num_ops: number of operations in the vertiport service
+num_ops: number of operations in the vertiport service (depending on the existence of buffer_in and buffer_out, the num_ops can be 3, 4, or 5)
 num_vehicle: number of UAMs supposed to use vertiport
 num_pad: number of pads for landing and take-off in vertiport
 num_buffer_in: capacity of waiting space before occupying a gate
@@ -50,6 +50,13 @@ weights: weights in objective function (1D list)
 M: big-M in formulation
 """
 
+"""
+solver: option for solver selction
+        - "exact": exact solver which guarantees optimal solution
+        - "FCFS_Gurobi": First-Come-First-Served sequencing is applied to Gurobi solver
+        - "FCFS_landing_Gurobi": Gurobi solver which applies First-Come-First-Served logic only for landing operations
+"""
+
 
 """
 1. Time unit is minute
@@ -61,5 +68,5 @@ if __name__ == "__main__":
     print("This is a module for solving optimization problems using Gurobi.")
     config = InstanceConfig(unified_buffer=True)  # Example: override defaults
     instance = generate_instance(config)
-    solution = solve(instance)
+    solution = solve(instance, solver="exact")
     visualize_result(instance, solution)

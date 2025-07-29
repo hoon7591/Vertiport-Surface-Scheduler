@@ -36,8 +36,20 @@ def visualize_result(instance, solution):
     resource_ind = solution.resource_ind
 
     fig, ax = plt.subplots(figsize=(20, 12))
-    colors = ['#66c2a5', '#fc8d62', '#8da0cb', '#e78ac3', '#a6d854']
-    operation_labels = ['Landing', 'Buffer-In', 'Gate', 'Buffer-Out', 'Take-Off']
+    if num_buffer_in == 0:
+        if num_buffer_out == 0:
+            colors = ['#66c2a5', '#8da0cb', '#a6d854']
+            operation_labels = ['Landing', 'Gate', 'Take-Off']
+        else:
+            colors = ['#66c2a5', '#8da0cb', '#e78ac3', '#a6d854']
+            operation_labels = ['Landing', 'Gate', 'Buffer-Out', 'Take-Off']
+    else:
+        if num_buffer_out == 0:
+            colors = ['#66c2a5', '#fc8d62', '#8da0cb', '#a6d854']
+            operation_labels = ['Landing', 'Buffer-In', 'Gate', 'Take-Off']
+        else:
+            colors = ['#66c2a5', '#fc8d62', '#8da0cb', '#e78ac3', '#a6d854']
+            operation_labels = ['Landing', 'Buffer-In', 'Gate', 'Buffer-Out', 'Take-Off']
     tardiness_color = '#d62728'
 
     yticks = list(range(num_resource))
@@ -48,11 +60,24 @@ def visualize_result(instance, solution):
             start = start_time_arr[v][o]
 
             # Determine finish and duration
-            if o == 1:
-                finish = start_time_arr[v][2]  # Buffer-In ends at Gate start
-            elif o == 3:
-                finish = start_time_arr[v][4]  # Buffer-Out ends at Takeoff start
-            else:
+            if num_buffer_in > 0 and num_buffer_out > 0:
+                if o == 1:
+                    finish = start_time_arr[v][2]  # Buffer-In ends at Gate start
+                elif o == 3:
+                    finish = start_time_arr[v][num_ops - 1]  # Buffer-Out ends at Takeoff start
+                else:
+                    finish = finish_time_arr[v][o]
+            elif num_buffer_in == 0 and num_buffer_out > 0:
+                if o == 2:
+                    finish = start_time_arr[v][num_ops - 1]  # Buffer-Out ends at Takeoff start
+                else:
+                    finish = finish_time_arr[v][o]
+            elif num_buffer_in > 0 and num_buffer_out == 0:
+                if o == 1:
+                    finish = start_time_arr[v][2]  # Buffer-In ends at Gate start
+                else:
+                    finish = finish_time_arr[v][o]
+            elif num_buffer_in == 0 and num_buffer_out == 0:
                 finish = finish_time_arr[v][o]
 
             duration = finish - start
@@ -66,7 +91,7 @@ def visualize_result(instance, solution):
             ax.barh(y, duration, left=start, height=0.4, color=colors[o], edgecolor='black', zorder=1)
 
             # Draw waiting bar
-            if o != 4:
+            if o != num_ops - 1:
                 waiting_duration = start_time_arr[v][o + 1] - finish
                 if waiting_duration > 0:
                     ax.barh(y, waiting_duration, left=finish, height=0.4, color='gray', edgecolor='black', zorder=1)
@@ -90,14 +115,14 @@ def visualize_result(instance, solution):
 
         # Departure Tardiness (after takeoff)
         if departure_tar_arr[v] > 0:
-            takeoff_res = int(assigned_res_arr[v][4])
-            takeoff_end = finish_time_arr[v][4]
+            takeoff_res = int(assigned_res_arr[v][num_ops - 1])
+            takeoff_end = finish_time_arr[v][num_ops - 1]
             ax.barh(takeoff_res, departure_tar_arr[v], left=due_d[v],
                     height=0.4, edgecolor=tardiness_color, facecolor='none', hatch='//', linewidth=1.2, zorder=2)
 
         for v in range(num_vehicle):
             landing_res = int(assigned_res_arr[v][0])
-            takeoff_res = int(assigned_res_arr[v][4])
+            takeoff_res = int(assigned_res_arr[v][num_ops - 1])
             y_landing = landing_res
             y_takeoff = takeoff_res
 

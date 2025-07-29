@@ -4,7 +4,7 @@ from Solution import Solution
 from Instance import Instance
 
 
-def solve(instance: Instance) -> Solution:
+def solve(instance: Instance, solver) -> Solution:
     seed = instance.seed
     num_ops = instance.num_ops
     num_vehicle = instance.num_vehicle
@@ -41,15 +41,29 @@ def solve(instance: Instance) -> Solution:
 
     # Set Constraints
     if unified_buffer:
-        resource_ind = [[0, num_pad], [num_pad, num_pad + num_buffer_in],
-                       [num_pad + num_buffer_in, num_pad + num_buffer_in + num_gate],
-                       [num_pad, num_pad + num_buffer_in],
-                       [0, num_pad]]  # [landing, buffer_in, gate, buffer_out, takeoff]
+        if num_buffer_in == 0:
+            resource_ind = [[0, num_pad], [num_pad, num_pad + num_gate], [0, num_pad]]  # [landing, gate, takeoff]
+        else:
+            resource_ind = [[0, num_pad], [num_pad, num_pad + num_buffer_in],
+                           [num_pad + num_buffer_in, num_pad + num_buffer_in + num_gate],
+                           [num_pad, num_pad + num_buffer_in],
+                           [0, num_pad]]  # [landing, buffer_in, gate, buffer_out, takeoff]
     else:
-        resource_ind = [[0, num_pad], [num_pad, num_pad + num_buffer_in],
-                        [num_pad + num_buffer_in, num_pad + num_buffer_in + num_gate],
-                        [num_pad + num_buffer_in + num_gate, num_pad + num_buffer_in + num_gate + num_buffer_out],
-                        [0, num_pad]]  # [landing, buffer_in, gate, buffer_out, takeoff]
+        if num_buffer_in == 0:
+            if num_buffer_out == 0:
+                resource_ind = [[0, num_pad], [num_pad, num_pad + num_gate], [0, num_pad]]  # [landing, gate, takeoff]
+            else:
+                resource_ind = [[0, num_pad], [num_pad, num_pad + num_gate],
+                                [num_pad + num_gate, num_pad + num_gate + num_buffer_out], [0, num_pad]]    # [landing, gate, buffer_out, takeoff]
+        else:
+            if num_buffer_out == 0:
+                resource_ind = [[0, num_pad], [num_pad, num_pad + num_buffer_in],
+                                [num_pad + num_buffer_in, num_pad + num_buffer_in + num_gate], [0, num_pad]]    # [landing, buffer_in, gate, takeoff]
+            else:
+                resource_ind = [[0, num_pad], [num_pad, num_pad + num_buffer_in],
+                                [num_pad + num_buffer_in, num_pad + num_buffer_in + num_gate],
+                                [num_pad + num_buffer_in + num_gate, num_pad + num_buffer_in + num_gate + num_buffer_out],
+                                [0, num_pad]]  # [landing, buffer_in, gate, buffer_out, takeoff]
 
     # Const. 1: Vehicle Assignment
     for i in range(num_ops):
@@ -84,7 +98,7 @@ def solve(instance: Instance) -> Solution:
                                 model.addConstr(S[i, j] + proc[i][j][k - resource_ind[i][0]] <= S[i_, j_] + M * (1 - x[i, i_, j, j_, k]))
 
                             # Const. 4: Separation
-                            if (i == 0 or i == 4) and (i_ == 0 or i_ == 4):
+                            if (i == 0 or i == num_ops - 1) and (i_ == 0 or i_ == num_ops - 1):
                                 model.addConstr(S[i_, j_] >= S[i, j] + proc[i][j][k - resource_ind[i][0]] +
                                                 ST[(i, i_)][j][j_][k] - M * (1 - x[i, i_, j, j_, k]))
 
@@ -96,8 +110,28 @@ def solve(instance: Instance) -> Solution:
     for i in range(num_vehicle):
         model.addConstr(T_a[i] >= S[0, i] + quicksum(y[0, i, j] * proc[0][i][j - resource_ind[0][0]]
                                                      for j in range(resource_ind[0][0], resource_ind[0][1])) - due_a[i])
-        model.addConstr(S[4, i] >= due_d[i])
-        model.addConstr(T_d[i] == S[4, i] - due_d[i])
+        model.addConstr(S[num_ops - 1, i] >= due_d[i])
+        model.addConstr(T_d[i] == S[num_ops - 1, i] - due_d[i])
+
+    # Const. 7: FCFS Implementation
+    if solver == "FCFS_Gurobi":
+        sorted_vehicle = np.argsort(ready)
+        for i in range(num_ops):
+            for j in range(num_vehicle - 1):
+                model.addConstr(S[i, sorted_vehicle[j]] <= S[i, sorted_vehicle[j + 1]])
+        for i in range(num_ops):
+            for j in range(num_vehicle - 1):
+                for j_ in range(j + 1, num_vehicle):
+                    for k in range(resource_ind[i][0], resource_ind[i][1]):
+                        model.addConstr(x[i, i, sorted_vehicle[j_], sorted_vehicle[j], k] == 0)
+    elif solver == "FCFS_landing_Gurobi":
+        sorted_vehicle = np.argsort(ready)
+        for j in range(num_vehicle - 1):
+            model.addConstr(S[0, sorted_vehicle[j]] <= S[0, sorted_vehicle[j + 1]])
+        for j in range(num_vehicle - 1):
+            for j_ in range(j + 1, num_vehicle):
+                for k in range(resource_ind[0][0], resource_ind[0][1]):
+                    model.addConstr(x[0, 0, sorted_vehicle[j_], sorted_vehicle[j], k] == 0)
 
     # Solve Model
     model.optimize()
