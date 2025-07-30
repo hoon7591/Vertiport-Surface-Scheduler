@@ -11,6 +11,7 @@ class Solution:
         arrival_tar_arr: np.ndarray,
         departure_tar_arr: np.ndarray,
         resource_ind: list,
+        solver: str,
     ):
         self.Obj = Obj
         self.Gurobi_Runtime = Gurobi_Runtime
@@ -20,3 +21,4 @@ class Solution:
         self.arrival_tar_arr = arrival_tar_arr
         self.departure_tar_arr = departure_tar_arr
         self.resource_ind = resource_ind
+        self.solver = solver

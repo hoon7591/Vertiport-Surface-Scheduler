@@ -26,8 +26,11 @@ def solve(instance: Instance, solver) -> Solution:
     model = Model("Vertiport_Surface_Scheduler")
     model.setParam('Seed', seed)
     model.setParam("OutputFlag", 1)
-    # model.setParam("MIPGap", 0.01)  # 1% gap tolerance
-    # model.setParam("TimeLimit", 60)  # 60 seconds (1 minute)
+    # model.setParam("MIPGap", 0.01)  # 1% gap tolerance (for Gurobi mode)
+    # model.setParam("TimeLimit", 60)  # 60 seconds (1 minute) (for Gurobi mode)
+    # if solver == "FCFS" or solver == "FCFS_landing" or solver == "no_rule":
+    #     model.setParam("PoolSearchMode", 2)  # Do a systematic search for alternatives (for SAT mode)
+    #     model.setParam("PoolSolutions", 10)  # Search for up to 10 feasible solutions (for SAT mode)
 
     # Define Variables
     S = model.addVars(num_ops, num_vehicle, vtype=GRB.CONTINUOUS, lb=0, name="start_time")           # S[o, v]
@@ -37,7 +40,10 @@ def solve(instance: Instance, solver) -> Solution:
     T_d = model.addVars(num_vehicle, vtype=GRB.CONTINUOUS, lb=0, name="tardiness_departure")
 
     # Define Objective
-    model.setObjective(quicksum(weights[0] * T_a[i] + weights[1] * T_d[i] for i in range(num_vehicle)), GRB.MINIMIZE)
+    if solver == "FCFS" or solver == "FCFS_landing" or solver == "no_rule":
+        pass
+    else:
+        model.setObjective(quicksum(weights[0] * T_a[i] + weights[1] * T_d[i] for i in range(num_vehicle)), GRB.MINIMIZE)
 
     # Set Constraints
     if unified_buffer:
@@ -114,7 +120,7 @@ def solve(instance: Instance, solver) -> Solution:
         model.addConstr(T_d[i] == S[num_ops - 1, i] - due_d[i])
 
     # Const. 7: FCFS Implementation
-    if solver == "FCFS_Gurobi":
+    if solver == "FCFS_Gurobi" or solver == "FCFS":
         sorted_vehicle = np.argsort(ready)
         for i in range(num_ops):
             for j in range(num_vehicle - 1):
@@ -124,7 +130,7 @@ def solve(instance: Instance, solver) -> Solution:
                 for j_ in range(j + 1, num_vehicle):
                     for k in range(resource_ind[i][0], resource_ind[i][1]):
                         model.addConstr(x[i, i, sorted_vehicle[j_], sorted_vehicle[j], k] == 0)
-    elif solver == "FCFS_landing_Gurobi":
+    elif solver == "FCFS_landing_Gurobi" or solver == "FCFS_landing":
         sorted_vehicle = np.argsort(ready)
         for j in range(num_vehicle - 1):
             model.addConstr(S[0, sorted_vehicle[j]] <= S[0, sorted_vehicle[j + 1]])
@@ -157,4 +163,7 @@ def solve(instance: Instance, solver) -> Solution:
                     finish_time_arr[i, j] += proc[j][i][k - resource_ind[j][0]]
                     assigned_res_arr[i, j] = k
 
-    return Solution(Obj, Gurobi_Runtime, start_time_arr, finish_time_arr, assigned_res_arr, arrival_tar_arr, departure_tar_arr, resource_ind)
+    if solver == "FCFS" or solver == "FCFS_landing" or solver == "no_rule":
+        Obj = weights[0] * sum(arrival_tar_arr) + weights[1] * sum(departure_tar_arr)
+
+    return Solution(Obj, Gurobi_Runtime, start_time_arr, finish_time_arr, assigned_res_arr, arrival_tar_arr, departure_tar_arr, resource_ind, solver)

@@ -55,6 +55,9 @@ solver: option for solver selction
         - "exact": exact solver which guarantees optimal solution
         - "FCFS_Gurobi": First-Come-First-Served sequencing is applied to Gurobi solver
         - "FCFS_landing_Gurobi": Gurobi solver which applies First-Come-First-Served logic only for landing operations
+        - "FCFS": First-Come-First-Served sequencing is applied to SAT solver
+        - "FCFS_landing": SAT solver which applies First-Come-First-Served logic only for landing operations
+        - "no_rule": SAT solver without any primary sequencing rule
 """
 
 
@@ -68,5 +71,5 @@ if __name__ == "__main__":
     print("This is a module for solving optimization problems using Gurobi.")
     config = InstanceConfig(unified_buffer=True)  # Example: override defaults
     instance = generate_instance(config)
-    solution = solve(instance, solver="exact")
+    solution = solve(instance, solver="FCFS")
     visualize_result(instance, solution)

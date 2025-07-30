@@ -34,6 +34,7 @@ def visualize_result(instance, solution):
     arrival_tar_arr = solution.arrival_tar_arr
     departure_tar_arr = solution.departure_tar_arr
     resource_ind = solution.resource_ind
+    solver = solution.solver
 
     fig, ax = plt.subplots(figsize=(20, 12))
     if num_buffer_in == 0:
@@ -148,7 +149,7 @@ def visualize_result(instance, solution):
     ax.set_ylim(-1, num_resource + 1)
     ax.set_title(f"Resource-Centric Gantt | Obj: {Obj:.2f}, "
                  f"Total AT: {sum(arrival_tar_arr):.2f}, Total DT: {sum(departure_tar_arr):.2f}, "
-                 f"Runtime: {Gurobi_Runtime:.2f}s")
+                 f"Runtime: {Gurobi_Runtime:.2f}s, Solver: {solver}")
 
     # Legend
     legend_ops = [mpatches.Patch(color=colors[i], label=operation_labels[i]) for i in range(num_ops)]
