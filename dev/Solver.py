@@ -166,4 +166,5 @@ def solve(instance: Instance, solver) -> Solution:
     if solver == "FCFS" or solver == "FCFS_landing" or solver == "no_rule":
         Obj = weights[0] * sum(arrival_tar_arr) + weights[1] * sum(departure_tar_arr)
 
-    return Solution(Obj, Gurobi_Runtime, start_time_arr, finish_time_arr, assigned_res_arr, arrival_tar_arr, departure_tar_arr, resource_ind, solver)
+    return Solution(Obj, Gurobi_Runtime, start_time_arr, finish_time_arr, assigned_res_arr, 
+                   arrival_tar_arr, departure_tar_arr, resource_ind, solver, instance)
