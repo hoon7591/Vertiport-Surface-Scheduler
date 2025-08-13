@@ -34,5 +34,5 @@ if __name__ == "__main__":
     print("This is a module for solving optimization problems using Gurobi.")
     config = InstanceConfig(unified_buffer=True)  # Example: override defaults
     instance = generate_instance(config)
-    solution = solve(instance, solver="FCFS")
+    solution = solve(instance, solver="exact")
     visualize_result(solution)
