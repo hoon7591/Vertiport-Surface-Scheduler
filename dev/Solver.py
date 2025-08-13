@@ -6,20 +6,20 @@ from Instance import Instance
 
 def solve(instance: Instance, solver) -> Solution:
     seed = instance.seed
-    num_ops = instance.num_ops
-    num_vehicle = instance.num_vehicle
+    num_ops = instance.num_operations
+    num_vehicle = instance.num_vehicles
     num_pad = instance.num_pad
     num_buffer_in = instance.num_buffer_in
     num_gate = instance.num_gate
     num_buffer_out = instance.num_buffer_out
     num_resource = instance.num_resource
-    weights = instance.weights
+    weights = instance.objective_weights
     ready = instance.ready
     proc = instance.proc
     due_a = instance.due_a
     due_d = instance.due_d
     ST = instance.ST
-    M = instance.M
+    big_M = instance.big_M
     unified_buffer = instance.unified_buffer
 
     # Initialize Model
@@ -99,14 +99,14 @@ def solve(instance: Instance, solver) -> Solution:
                             model.addConstr(x[i, i_, j, j_, k] + x[i_, i, j_, j, k] <= 1)
                             model.addConstr(x[i, i_, j, j_, k] + x[i_, i, j_, j, k] >= y[i, j, k] + y[i_, j_, k] - 1)
                             if i != num_ops - 1:
-                                model.addConstr(S[i + 1, j] <= S[i_, j_] + M * (1 - x[i, i_, j, j_, k]))
+                                model.addConstr(S[i + 1, j] <= S[i_, j_] + big_M * (1 - x[i, i_, j, j_, k]))
                             else:
-                                model.addConstr(S[i, j] + proc[i][j][k - resource_ind[i][0]] <= S[i_, j_] + M * (1 - x[i, i_, j, j_, k]))
+                                model.addConstr(S[i, j] + proc[i][j][k - resource_ind[i][0]] <= S[i_, j_] + big_M * (1 - x[i, i_, j, j_, k]))
 
                             # Const. 4: Separation
                             if (i == 0 or i == num_ops - 1) and (i_ == 0 or i_ == num_ops - 1):
                                 model.addConstr(S[i_, j_] >= S[i, j] + proc[i][j][k - resource_ind[i][0]] +
-                                                ST[(i, i_)][j][j_][k] - M * (1 - x[i, i_, j, j_, k]))
+                                                ST[(i, i_)][j][j_][k] - big_M * (1 - x[i, i_, j, j_, k]))
 
     # Const. 5: Ready
     for i in range(num_vehicle):
@@ -121,50 +121,50 @@ def solve(instance: Instance, solver) -> Solution:
 
     # Const. 7: FCFS Implementation
     if solver == "FCFS_Gurobi" or solver == "FCFS":
-        sorted_vehicle = np.argsort(ready)
+        sorted_vehicle_indices = np.argsort(ready)
         for i in range(num_ops):
             for j in range(num_vehicle - 1):
-                model.addConstr(S[i, sorted_vehicle[j]] <= S[i, sorted_vehicle[j + 1]])
+                model.addConstr(S[i, sorted_vehicle_indices[j]] <= S[i, sorted_vehicle_indices[j + 1]])
         for i in range(num_ops):
             for j in range(num_vehicle - 1):
                 for j_ in range(j + 1, num_vehicle):
                     for k in range(resource_ind[i][0], resource_ind[i][1]):
-                        model.addConstr(x[i, i, sorted_vehicle[j_], sorted_vehicle[j], k] == 0)
+                        model.addConstr(x[i, i, sorted_vehicle_indices[j_], sorted_vehicle_indices[j], k] == 0)
     elif solver == "FCFS_landing_Gurobi" or solver == "FCFS_landing":
-        sorted_vehicle = np.argsort(ready)
+        sorted_vehicle_indices = np.argsort(ready)
         for j in range(num_vehicle - 1):
-            model.addConstr(S[0, sorted_vehicle[j]] <= S[0, sorted_vehicle[j + 1]])
+            model.addConstr(S[0, sorted_vehicle_indices[j]] <= S[0, sorted_vehicle_indices[j + 1]])
         for j in range(num_vehicle - 1):
             for j_ in range(j + 1, num_vehicle):
                 for k in range(resource_ind[0][0], resource_ind[0][1]):
-                    model.addConstr(x[0, 0, sorted_vehicle[j_], sorted_vehicle[j], k] == 0)
+                    model.addConstr(x[0, 0, sorted_vehicle_indices[j_], sorted_vehicle_indices[j], k] == 0)
 
     # Solve Model
     model.optimize()
 
     # Extract Solution
-    start_time_arr = np.zeros((num_vehicle, num_ops))
-    finish_time_arr = np.zeros((num_vehicle, num_ops))
-    assigned_res_arr = np.zeros((num_vehicle, num_ops))
-    arrival_tar_arr = np.zeros(num_vehicle)
-    departure_tar_arr = np.zeros(num_vehicle)
+    start_times = np.zeros((num_vehicle, num_ops))
+    finish_times = np.zeros((num_vehicle, num_ops))
+    assigned_resources = np.zeros((num_vehicle, num_ops))
+    arrival_time_tardiness = np.zeros(num_vehicle)
+    departure_time_tardiness = np.zeros(num_vehicle)
 
-    Obj = model.ObjVal
-    Gurobi_Runtime = model.Runtime
+    obj_val = model.ObjVal
+    runtime = model.Runtime
 
     for i in range(num_vehicle):
-        arrival_tar_arr[i] = T_a[i].X
-        departure_tar_arr[i] = T_d[i].X
+        arrival_time_tardiness[i] = T_a[i].X
+        departure_time_tardiness[i] = T_d[i].X
         for j in range(num_ops):
-            start_time_arr[i, j] = S[j, i].X
-            finish_time_arr[i, j] = start_time_arr[i, j]
+            start_times[i, j] = S[j, i].X
+            finish_times[i, j] = start_times[i, j]
             for k in range(resource_ind[j][0], resource_ind[j][1]):
                 if y[j, i, k].X >= 0.5:
-                    finish_time_arr[i, j] += proc[j][i][k - resource_ind[j][0]]
-                    assigned_res_arr[i, j] = k
+                    finish_times[i, j] += proc[j][i][k - resource_ind[j][0]]
+                    assigned_resources[i, j] = k
 
     if solver == "FCFS" or solver == "FCFS_landing" or solver == "no_rule":
-        Obj = weights[0] * sum(arrival_tar_arr) + weights[1] * sum(departure_tar_arr)
+        obj_val = weights[0] * sum(arrival_time_tardiness) + weights[1] * sum(departure_time_tardiness)
 
-    return Solution(Obj, Gurobi_Runtime, start_time_arr, finish_time_arr, assigned_res_arr, 
-                   arrival_tar_arr, departure_tar_arr, resource_ind, solver, instance)
+    return Solution(obj_val, runtime, start_times, finish_times, assigned_resources, 
+                   arrival_time_tardiness, departure_time_tardiness, resource_ind, solver, instance)
