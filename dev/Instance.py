@@ -98,14 +98,14 @@ class Instance:
         proc_air_o: List[float],
         proc_gate_v: List[int],
         st_list: Any,
-        ready_max: float,
+        maximum_arrival_time: float,
         ETA_ready_diff: List[float],
         ETD_margin: float,
         unified_buffer: bool,
-        ready: np.ndarray,
+        vehicle_arrival_times: np.ndarray,
         proc: list,
-        due_a: np.ndarray,
-        due_d: np.ndarray,
+        vehicle_planed_arrival_times: np.ndarray,
+        vehicle_planed_departure_times: np.ndarray,
         ST: dict,
         vehicle_type: np.ndarray,
         M: float,
@@ -124,14 +124,14 @@ class Instance:
         self.proc_air_o = proc_air_o
         self.proc_gate_v = proc_gate_v
         self.st_list = st_list
-        self.ready_max = ready_max
-        self.ETA_ready_diff = ETA_ready_diff
-        self.ETD_margin = ETD_margin
+        self.maximum_arrival_time = maximum_arrival_time
+        self.ETA_ready_diff = ETA_ready_diff # TODO : check if it needs?
+        self.ETD_margin = ETD_margin # TODO : check if it needs?
         self.unified_buffer = unified_buffer
-        self.ready = ready
+        self.vehicle_arrival_times = vehicle_arrival_times
         self.proc = proc
-        self.due_a = due_a
-        self.due_d = due_d
+        self.vehicle_planed_arrival_times = vehicle_planed_arrival_times
+        self.vehicle_planed_departure_times = vehicle_planed_departure_times
         self.ST = ST
         self.vehicle_type = vehicle_type
         self.big_M = M

@@ -82,10 +82,10 @@ class SolverStrategy(ABC):
         """Add base constraints common to all solver strategies."""
         num_ops = instance.num_operations
         num_vehicle = instance.num_vehicles
-        ready = instance.ready
-        proc = instance.proc
-        due_a = instance.due_a
-        due_d = instance.due_d
+        vehicle_arrival_times = instance.vehicle_arrival_times
+        processing_times = instance.proc
+        vehicle_planed_arrival_times = instance.vehicle_planed_arrival_times
+        vehicle_planed_departure_times = instance.vehicle_planed_arrival_times
         ST = instance.ST
         big_M = instance.big_M
 
@@ -97,7 +97,7 @@ class SolverStrategy(ABC):
         # Const. 2: Precedence
         for i in range(num_ops - 1):
             for j in range(num_vehicle):
-                model.addConstr(S[i + 1, j] >= S[i, j] + quicksum(y[i, j, k] * proc[i][j][k - resource_ind[i][0]]
+                model.addConstr(S[i + 1, j] >= S[i, j] + quicksum(y[i, j, k] * processing_times[i][j][k - resource_ind[i][0]]
                                                                   for k in range(resource_ind[i][0], resource_ind[i][1])))
 
         # Const. 3: Overlap Avoidance with Reentrant Condition and Blocking
@@ -119,23 +119,23 @@ class SolverStrategy(ABC):
                                 if i != num_ops - 1:
                                     model.addConstr(S[i + 1, j] <= S[i_, j_] + big_M * (1 - x[i, i_, j, j_, k]))
                                 else:
-                                    model.addConstr(S[i, j] + proc[i][j][k - resource_ind[i][0]] <= S[i_, j_] + big_M * (1 - x[i, i_, j, j_, k]))
+                                    model.addConstr(S[i, j] + processing_times[i][j][k - resource_ind[i][0]] <= S[i_, j_] + big_M * (1 - x[i, i_, j, j_, k]))
 
                                 # Const. 4: Separation
                                 if (i == 0 or i == num_ops - 1) and (i_ == 0 or i_ == num_ops - 1):
-                                    model.addConstr(S[i_, j_] >= S[i, j] + proc[i][j][k - resource_ind[i][0]] +
+                                    model.addConstr(S[i_, j_] >= S[i, j] + processing_times[i][j][k - resource_ind[i][0]] +
                                                     ST[(i, i_)][j][j_][k] - big_M * (1 - x[i, i_, j, j_, k]))
 
         # Const. 5: Ready
         for i in range(num_vehicle):
-            model.addConstr(S[0, i] >= ready[i])
+            model.addConstr(S[0, i] >= vehicle_arrival_times[i])
 
         # Const. 6: Tardiness Calculation with No early Departure
         for i in range(num_vehicle):
-            model.addConstr(T_a[i] >= S[0, i] + quicksum(y[0, i, j] * proc[0][i][j - resource_ind[0][0]]
-                                                         for j in range(resource_ind[0][0], resource_ind[0][1])) - due_a[i])
-            model.addConstr(S[num_ops - 1, i] >= due_d[i])
-            model.addConstr(T_d[i] == S[num_ops - 1, i] - due_d[i])
+            model.addConstr(T_a[i] >= S[0, i] + quicksum(y[0, i, j] * processing_times[0][i][j - resource_ind[0][0]]
+                                                         for j in range(resource_ind[0][0], resource_ind[0][1])) - vehicle_planed_arrival_times[i])
+            model.addConstr(S[num_ops - 1, i] >= vehicle_planed_departure_times[i])
+            model.addConstr(T_d[i] == S[num_ops - 1, i] - vehicle_planed_departure_times[i])
 
     def _extract_solution(self, model: Model, instance: Instance, variables: Dict, solver_name: str) -> Solution:
         """Extract solution from the solved model."""
@@ -234,7 +234,7 @@ class FCFSSolver(SolverStrategy):
         """Add FCFS-specific constraints for all operations."""
         num_ops = instance.num_operations
         num_vehicle = instance.num_vehicles
-        ready = instance.ready
+        ready = instance.vehicle_arrival_times
         S = variables['S']
         x = variables['x']
         resource_ind = variables['resource_ind']
@@ -252,7 +252,7 @@ class FCFSSolver(SolverStrategy):
     def _add_fcfs_landing_constraints(self, model, instance: Instance, variables):
         """Add FCFS landing-specific constraints."""
         num_vehicle = instance.num_vehicles
-        ready = instance.ready
+        ready = instance.vehicle_arrival_times
         S = variables['S']
         x = variables['x']
         resource_ind = variables['resource_ind']

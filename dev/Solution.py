@@ -41,10 +41,10 @@ class Solution:
             self.num_gate = instance.num_gate
             self.num_buffer_out = instance.num_buffer_out
             self.vehicle_type = instance.vehicle_type
-            self.ready = instance.ready
+            self.ready = instance.vehicle_arrival_times
             self.proc = instance.proc
-            self.due_a = instance.due_a
-            self.due_d = instance.due_d
+            self.due_a = instance.vehicle_planed_arrival_times
+            self.due_d = instance.vehicle_planed_arrival_times
             self.weights = instance.objective_weights
             self.big_M = instance.big_M
             
