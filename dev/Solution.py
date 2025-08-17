@@ -43,8 +43,8 @@ class Solution:
             self.vehicle_type = instance.vehicle_type
             self.ready = instance.vehicle_arrival_times
             self.proc = instance.proc
-            self.due_a = instance.vehicle_planed_arrival_times
-            self.due_d = instance.vehicle_planed_arrival_times
+            self.due_a = instance.vehicle_planned_arrival_times
+            self.due_d = instance.vehicle_planned_arrival_times
             self.weights = instance.objective_weights
             self.big_M = instance.big_M
             

@@ -50,9 +50,9 @@ class SolverStrategy(ABC):
         num_buffer_in = instance.num_buffer_in
         num_gate = instance.num_gate
         num_buffer_out = instance.num_buffer_out
-        unified_buffer = instance.unified_buffer
+        is_unified_buffer = instance.is_unified_buffer
 
-        if unified_buffer:
+        if is_unified_buffer:
             if num_buffer_in == 0:
                 resource_ind = [[0, num_pad], [num_pad, num_pad + num_gate], [0, num_pad]]
             else:
@@ -84,8 +84,8 @@ class SolverStrategy(ABC):
         num_vehicle = instance.num_vehicles
         vehicle_arrival_times = instance.vehicle_arrival_times
         processing_times = instance.proc
-        vehicle_planed_arrival_times = instance.vehicle_planed_arrival_times
-        vehicle_planed_departure_times = instance.vehicle_planed_arrival_times
+        vehicle_planned_arrival_times = instance.vehicle_planned_arrival_times
+        vehicle_planned_departure_times = instance.vehicle_planned_arrival_times
         ST = instance.ST
         big_M = instance.big_M
 
@@ -133,9 +133,9 @@ class SolverStrategy(ABC):
         # Const. 6: Tardiness Calculation with No early Departure
         for i in range(num_vehicle):
             model.addConstr(T_a[i] >= S[0, i] + quicksum(y[0, i, j] * processing_times[0][i][j - resource_ind[0][0]]
-                                                         for j in range(resource_ind[0][0], resource_ind[0][1])) - vehicle_planed_arrival_times[i])
-            model.addConstr(S[num_ops - 1, i] >= vehicle_planed_departure_times[i])
-            model.addConstr(T_d[i] == S[num_ops - 1, i] - vehicle_planed_departure_times[i])
+                                                         for j in range(resource_ind[0][0], resource_ind[0][1])) - vehicle_planned_arrival_times[i])
+            model.addConstr(S[num_ops - 1, i] >= vehicle_planned_departure_times[i])
+            model.addConstr(T_d[i] == S[num_ops - 1, i] - vehicle_planned_departure_times[i])
 
     def _extract_solution(self, model: Model, instance: Instance, variables: Dict, solver_name: str) -> Solution:
         """Extract solution from the solved model."""

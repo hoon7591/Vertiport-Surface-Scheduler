@@ -2,6 +2,7 @@ from Generator import generate_instance
 from Solver import solve
 from Visualizer import visualize_result
 from Instance import InstanceConfig
+from VertiportSimulator import VertiportSimulator
 
 
 # Hyper Parameter Lists for Problem Generation in InstanceConfig
@@ -31,8 +32,35 @@ from Instance import InstanceConfig
 
 
 if __name__ == "__main__":
+    '''
     print("This is a module for solving optimization problems using Gurobi.")
-    config = InstanceConfig(unified_buffer=True)  # Example: override defaults
+    config = InstanceConfig(is_unified_buffer=True)  # Example: override defaults
     instance = generate_instance(config)
     solution = solve(instance, solver="exact")
     visualize_result(solution)
+    '''
+    
+    config = InstanceConfig(is_unified_buffer=True)  # Example: override defaults
+    instance = generate_instance(config)
+    # Create simulator
+    simulator = VertiportSimulator(instance, random_seed=42)
+
+    # Step-by-step control
+    while not simulator.is_simulation_complete():
+        event = simulator.step_to_next_event()
+        
+        # Your scheduling logic here
+        for operation in range(instance.num_operations):
+            waiting_vehicles = simulator.get_waiting_vehicles(operation)
+            available_resources = simulator.get_available_resources(operation)
+            
+            # Make assignment decisions
+            if waiting_vehicles and available_resources:
+                vehicle = waiting_vehicles[0]  # Your selection logic
+                resource = available_resources[0]  # Your selection logic
+                
+                if simulator.can_assign_vehicle_to_resource(vehicle.id, resource.id, operation):
+                    simulator.assign_vehicle_to_resource(vehicle.id, resource.id, operation)
+
+    # Get final solution
+    solution = simulator._generate_solution()

@@ -61,7 +61,7 @@ class InstanceConfig:
     num_pad: int = 2
     num_buffer_in: int = 3
     num_gate: int = 10
-    num_buffer_out: int = 3
+    num_buffer_out: int = 3 # not used for is_unified_buffer = True: if True, this is merged with buffer_in #TODO : revise implicitly
     objective_weights: List[float] = field(default_factory=lambda: [0.5, 0.5])
     proc_air_v: List[float] = field(default_factory=lambda: [2.0, 2.2, 2.8, 3.0])
     proc_air_r: List[float] = field(default_factory=lambda: [1.0, 0.8])
@@ -78,7 +78,7 @@ class InstanceConfig:
     ready_max: float = 100.0
     ETA_ready_diff: List[float] = field(default_factory=lambda: [3, 10])
     ETD_margin: float = 5.0
-    unified_buffer: bool = False
+    is_unified_buffer: bool = False
 
 
 class Instance:
@@ -98,14 +98,14 @@ class Instance:
         proc_air_o: List[float],
         proc_gate_v: List[int],
         st_list: Any,
-        maximum_arrival_time: float,
+        maximum_arrival_time: float, # defines instance's horizon 
         ETA_ready_diff: List[float],
         ETD_margin: float,
-        unified_buffer: bool,
+        is_unified_buffer: bool,
         vehicle_arrival_times: np.ndarray,
         proc: list,
-        vehicle_planed_arrival_times: np.ndarray,
-        vehicle_planed_departure_times: np.ndarray,
+        vehicle_planned_arrival_times: np.ndarray,
+        vehicle_planned_departure_times: np.ndarray,
         ST: dict,
         vehicle_type: np.ndarray,
         M: float,
@@ -127,11 +127,11 @@ class Instance:
         self.maximum_arrival_time = maximum_arrival_time
         self.ETA_ready_diff = ETA_ready_diff # TODO : check if it needs?
         self.ETD_margin = ETD_margin # TODO : check if it needs?
-        self.unified_buffer = unified_buffer
+        self.is_unified_buffer = is_unified_buffer
         self.vehicle_arrival_times = vehicle_arrival_times
         self.proc = proc
-        self.vehicle_planed_arrival_times = vehicle_planed_arrival_times
-        self.vehicle_planed_departure_times = vehicle_planed_departure_times
+        self.vehicle_planned_arrival_times = vehicle_planned_arrival_times
+        self.vehicle_planned_departure_times = vehicle_planned_departure_times
         self.ST = ST
         self.vehicle_type = vehicle_type
         self.big_M = M
@@ -139,12 +139,12 @@ class Instance:
     @classmethod
     def from_config(cls, config: "InstanceConfig") -> "Instance":
         np.random.seed(config.seed)
-        if config.unified_buffer:
+        if config.is_unified_buffer:
             num_resource = config.num_pad + config.num_buffer_in + config.num_gate
         else:
             num_resource = config.num_pad + config.num_buffer_in + config.num_gate + config.num_buffer_out
 
-        if config.unified_buffer:
+        if config.is_unified_buffer:
             if config.num_buffer_in == 0:
                 config.num_buffer_out = config.num_buffer_in
             elif config.num_buffer_out == 0:
@@ -206,8 +206,8 @@ class Instance:
                 proc = [proc_landing, proc_buffer_in, proc_gate, proc_buffer_out, proc_takeoff]
 
         ETA_ready_diff_arr = config.ETA_ready_diff[0] + config.ETA_ready_diff[0] / 4 * np.random.randn(config.num_vehicles)
-        due_a = ready + ETA_ready_diff_arr
-        due_d = due_a + TAT + config.ETD_margin
+        vehicle_planned_arrival_times = ready + ETA_ready_diff_arr
+        vehicle_planned_departure_times = vehicle_planned_arrival_times + TAT + config.ETD_margin
 
         o_key_map = {
             0: (0, 0),
@@ -242,6 +242,6 @@ class Instance:
         return cls(
             config.seed, config.num_operations, config.num_vehicles, config.num_pad, config.num_buffer_in, config.num_gate, config.num_buffer_out,
             num_resource, config.objective_weights, config.proc_air_v, config.proc_air_r, config.proc_air_o, config.proc_gate_v,
-            st_list, config.ready_max, config.ETA_ready_diff, config.ETD_margin, config.unified_buffer,
-            ready, proc, due_a, due_d, ST_rounded, vehicle_type, M
+            st_list, config.ready_max, config.ETA_ready_diff, config.ETD_margin, config.is_unified_buffer,
+            ready, proc, vehicle_planned_arrival_times, vehicle_planned_departure_times, ST_rounded, vehicle_type, M
         )
