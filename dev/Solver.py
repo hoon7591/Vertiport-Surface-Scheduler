@@ -85,7 +85,7 @@ class SolverStrategy(ABC):
         vehicle_arrival_times = instance.vehicle_arrival_times
         processing_times = instance.proc
         vehicle_planned_arrival_times = instance.vehicle_planned_arrival_times
-        vehicle_planned_departure_times = instance.vehicle_planned_arrival_times
+        vehicle_planned_departure_times = instance.vehicle_planned_departure_times
         ST = instance.ST
         big_M = instance.big_M
 

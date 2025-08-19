@@ -32,35 +32,35 @@ from VertiportSimulator import VertiportSimulator
 
 
 if __name__ == "__main__":
-    '''
-    print("This is a module for solving optimization problems using Gurobi.")
-    config = InstanceConfig(is_unified_buffer=True)  # Example: override defaults
-    instance = generate_instance(config)
-    solution = solve(instance, solver="exact")
-    visualize_result(solution)
-    '''
     
-    config = InstanceConfig(is_unified_buffer=True)  # Example: override defaults
+    print("This is a module for solving optimization problems using Gurobi.")
+    config = InstanceConfig(is_unified_buffer=False, num_gate=3, num_buffer_in=2, num_buffer_out=2)  # Example: override defaults
     instance = generate_instance(config)
+    
+    # Solve by exact gurobi solver
+    # solution = solve(instance, solver="exact")
+    # visualize_result(solution)
+        
     # Create simulator
-    simulator = VertiportSimulator(instance, random_seed=42)
+    simulator = VertiportSimulator(instance)
 
-    # Step-by-step control
+    # Step-by-step control with FCFS logic
     while not simulator.is_simulation_complete():
         event = simulator.step_to_next_event()
         
-        # Your scheduling logic here
+        # FCFS scheduling logic here - TODO : improve more - multiple vehicles and multiple resources
         for operation in range(instance.num_operations):
             waiting_vehicles = simulator.get_waiting_vehicles(operation)
             available_resources = simulator.get_available_resources(operation)
             
             # Make assignment decisions
             if waiting_vehicles and available_resources:
-                vehicle = waiting_vehicles[0]  # Your selection logic
-                resource = available_resources[0]  # Your selection logic
+                vehicle = waiting_vehicles[0]  # selection logic
+                resource = available_resources[0]  # selection logic
                 
                 if simulator.can_assign_vehicle_to_resource(vehicle.id, resource.id, operation):
-                    simulator.assign_vehicle_to_resource(vehicle.id, resource.id, operation)
+                    simulator.assign_vehicle_to_resource_now(vehicle.id, resource.id, operation)
 
     # Get final solution
     solution = simulator._generate_solution()
+    visualize_result(solution)
