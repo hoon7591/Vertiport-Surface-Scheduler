@@ -35,15 +35,15 @@ def visualize_result(solution):
     solver_runtime = solution.solver_runtime
     start_times = solution.start_times
     assigned_resources = solution.assigned_resources
-    arrival_time_tardiness = solution.arrival_time_tardiness
-    departure_time_tardiness = solution.departure_time_tardiness
+    arrival_tardiness = solution.arrival_time_tardiness
+    departure_tardiness = solution.departure_time_tardiness
     solver_type = solution.solver_type
     
     # Physical characteristics from solution
     vehicle_type = solution.vehicle_type
     ready = solution.ready
-    due_a = solution.due_a
-    due_d = solution.due_d
+    planned_arrival_times = solution.due_a
+    planned_departure_times = solution.due_d
     
     # Generate visualization info
     operation_labels, colors = _get_operation_display_info(num_buffer_in, num_buffer_out)
@@ -88,33 +88,32 @@ def visualize_result(solution):
             ax.text(finish + 0.2, y, f"F:{finish:.1f}", ha='right', va='center', fontsize=7, color='black')
 
         # Arrival Tardiness (after landing)
-        if arrival_time_tardiness[v] > 0:
-            landing_res = int(assigned_resources[v][0])
-            landing_end = solution.get_operation_finish_time(v, 0)
-            ax.barh(landing_res, arrival_time_tardiness[v], left=landing_end - arrival_time_tardiness[v],
+        if arrival_tardiness[v] > 0:
+            landing_resource_idx = int(assigned_resources[v][0])
+            ax.barh(landing_resource_idx, arrival_tardiness[v], left=planned_arrival_times[v],
                     height=0.4, edgecolor=tardiness_color, facecolor='none', hatch='//', linewidth=1.2, zorder=2)
 
         # Departure Tardiness (after takeoff)
-        if departure_time_tardiness[v] > 0:
-            takeoff_res = int(assigned_resources[v][num_operations - 1])
-            ax.barh(takeoff_res, departure_time_tardiness[v], left=due_d[v],
+        if departure_tardiness[v] > 0:
+            takeoff_resource_idx = int(assigned_resources[v][num_operations - 1])
+            ax.barh(takeoff_resource_idx, departure_tardiness[v], left=planned_departure_times[v],
                     height=0.4, edgecolor=tardiness_color, facecolor='none', hatch='//', linewidth=1.2, zorder=2)
 
     for v in range(num_vehicles):
-        landing_res = int(assigned_resources[v][0])
-        takeoff_res = int(assigned_resources[v][num_operations - 1])
-        y_landing = landing_res
-        y_takeoff = takeoff_res
+        landing_resource_idx = int(assigned_resources[v][0])
+        takeoff_resource_idx = int(assigned_resources[v][num_operations - 1])
+        y_landing = landing_resource_idx
+        y_takeoff = takeoff_resource_idx
 
         # ETA marker on Landing row
-        ax.vlines(due_a[v], ymin=y_landing - 0.2, ymax=y_landing + 0.2,
+        ax.vlines(planned_arrival_times[v], ymin=y_landing - 0.2, ymax=y_landing + 0.2,
                   color='blue', linestyle='--', alpha=0.6)
-        ax.text(due_a[v], y_landing + 0.3, f"ETA\nV{v}\nAT:{arrival_time_tardiness[v]:.1f}", fontsize=7, color='blue', ha='center')
+        ax.text(planned_arrival_times[v], y_landing + 0.3, f"ETA\nV{v}\nAT:{arrival_tardiness[v]:.1f}", fontsize=7, color='blue', ha='center')
 
         # ETD marker on Takeoff row
-        ax.vlines(due_d[v], ymin=y_takeoff - 0.2, ymax=y_takeoff + 0.2,
+        ax.vlines(planned_departure_times[v], ymin=y_takeoff - 0.2, ymax=y_takeoff + 0.2,
                   color='red', linestyle='--', alpha=0.6)
-        ax.text(due_d[v], y_takeoff - 0.42, f"ETD\nV{v}\nDT:{departure_time_tardiness[v]:.1f}", fontsize=7, color='red', ha='center')
+        ax.text(planned_departure_times[v], y_takeoff - 0.42, f"ETD\nV{v}\nDT:{departure_tardiness[v]:.1f}", fontsize=7, color='red', ha='center')
 
         # Ready marker on Landing row
         ax.vlines(ready[v], ymin=y_landing - 0.2, ymax=y_landing + 0.2,

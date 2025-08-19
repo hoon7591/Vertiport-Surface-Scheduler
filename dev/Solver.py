@@ -178,7 +178,6 @@ class SolverStrategy(ABC):
         return Solution(obj_val, runtime, start_times, finish_times, assigned_resources,
                        arrival_time_tardiness, departure_time_tardiness, resource_ind, solver_name, instance)
 
-
 class ExactSolver(SolverStrategy):
     """Exact solver that guarantees optimal solution."""
     
@@ -197,7 +196,6 @@ class ExactSolver(SolverStrategy):
         model.optimize()
         
         return self._extract_solution(model, instance, variables, "exact")
-
 
 class FCFSSolver(SolverStrategy):
     """First-Come-First-Served solver implementation."""
