@@ -421,7 +421,7 @@ class VertiportSimulator:
         
         for res_id in range(start_idx, end_idx):
             resource = self.resources[res_id]
-            if resource.state == ResourceState.IDLE or resource.state == ResourceState.SEPARATION_DELAY:
+            if resource.state == ResourceState.IDLE:
                 available.append(resource)
         
         return available

@@ -177,7 +177,7 @@ class SolverStrategy(ABC):
                         assigned_resources[i, j] = k
 
         # Calculate objective value for SAT-based solvers
-        if solver_name in ["FCFS", "FCFS_landing", "no_rule"]:
+        if solver_name in ["FCFS_SAT", "FCFS_landing_SAT", "no_rule_SAT"]:
             obj_val = weights[0] * sum(arrival_time_tardiness) + weights[1] * sum(departure_time_tardiness)
 
         return Solution(obj_val, runtime, start_times, finish_times, assigned_resources,
@@ -223,10 +223,10 @@ class FCFSSolver(SolverStrategy):
         # Add FCFS constraints
         if self.landing_only:
             self._add_fcfs_landing_constraints(model, instance, variables)
-            solver_name = "FCFS_landing_Gurobi" if self.use_gurobi else "FCFS_landing"
+            solver_name = "FCFS_landing_Gurobi" if self.use_gurobi else "FCFS_landing_SAT"
         else:
             self._add_fcfs_constraints(model, instance, variables)
-            solver_name = "FCFS_Gurobi" if self.use_gurobi else "FCFS"
+            solver_name = "FCFS_Gurobi" if self.use_gurobi else "FCFS_SAT"
         
         # Solve the model
         model.optimize()
@@ -278,17 +278,17 @@ class NoRuleSolver(SolverStrategy):
         # No objective function set for SAT mode
         model.optimize()
         
-        return self._extract_solution(model, instance, variables, "no_rule")
+        return self._extract_solution(model, instance, variables, "no_rule_SAT")
 
 
 # Solver factory with minimal overhead
 _SOLVER_INSTANCES = {
     "exact": ExactSolver(),
-    "FCFS": FCFSSolver(is_objective_enabled=False, FCFS_for_landing_only=False),
+    "FCFS_SAT": FCFSSolver(is_objective_enabled=False, FCFS_for_landing_only=False),
     "FCFS_Gurobi": FCFSSolver(is_objective_enabled=True, FCFS_for_landing_only=False),
-    "FCFS_landing": FCFSSolver(is_objective_enabled=False, FCFS_for_landing_only=True),
+    "FCFS_landing_SAT": FCFSSolver(is_objective_enabled=False, FCFS_for_landing_only=True),
     "FCFS_landing_Gurobi": FCFSSolver(is_objective_enabled=True, FCFS_for_landing_only=True),
-    "no_rule": NoRuleSolver(),
+    "no_rule_SAT": NoRuleSolver(),
 }
 
 
@@ -303,7 +303,7 @@ def solve(instance: Instance, solver: str) -> Solution:
         instance: Instance object containing problem data
         solver: String identifier for the solver strategy to use
                 Available options: "exact", "FCFS_Gurobi", "FCFS_landing_Gurobi", 
-                "FCFS", "FCFS_landing", "no_rule"
+                "FCFS_SAT", "FCFS_landing_SAT", "no_rule_SAT"
     
     Returns:
         Solution: Solution object containing optimization results
