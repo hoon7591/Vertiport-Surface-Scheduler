@@ -42,8 +42,9 @@ def visualize_result(solution):
     # Physical characteristics from solution
     vehicle_type = solution.vehicle_type
     ready = solution.ready
-    planned_arrival_times = solution.due_a
-    planned_departure_times = solution.due_d
+    planned_arrival_times = solution.vehicle_planned_arrival_times
+    planned_departure_times = solution.vehicle_planned_departure_times
+    planned_gate_closing_times = solution.vehicle_planned_gate_close_times
     
     # Generate visualization info
     operation_labels, colors = _get_operation_display_info(num_buffer_in, num_buffer_out)
@@ -101,14 +102,24 @@ def visualize_result(solution):
 
     for v in range(num_vehicles):
         landing_resource_idx = int(assigned_resources[v][0])
+        if num_buffer_out > 0:
+            gate_resource_idx = int(assigned_resources[v][num_operations - 3])
+        else:
+            gate_resource_idx = int(assigned_resources[v][num_operations - 2])
         takeoff_resource_idx = int(assigned_resources[v][num_operations - 1])
         y_landing = landing_resource_idx
+        y_gate = gate_resource_idx
         y_takeoff = takeoff_resource_idx
 
         # ETA marker on Landing row
         ax.vlines(planned_arrival_times[v], ymin=y_landing - 0.2, ymax=y_landing + 0.2,
                   color='blue', linestyle='--', alpha=0.6)
         ax.text(planned_arrival_times[v], y_landing + 0.3, f"ETA\nV{v}\nAT:{arrival_tardiness[v]:.1f}", fontsize=7, color='blue', ha='center')
+
+        # Gate closing time marker on Gate row (no early departure)
+        ax.vlines(planned_gate_closing_times[v], ymin=y_gate - 0.2, ymax=y_gate + 0.2,
+                  color='green', linestyle='--', alpha=0.6)
+        ax.text(planned_gate_closing_times[v], y_gate - 0.3, f"NED\nV{v}", fontsize=7, color='green', ha='center')
 
         # ETD marker on Takeoff row
         ax.vlines(planned_departure_times[v], ymin=y_takeoff - 0.2, ymax=y_takeoff + 0.2,

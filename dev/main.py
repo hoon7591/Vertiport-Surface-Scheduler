@@ -34,12 +34,12 @@ from VertiportSimulator import VertiportSimulator
 if __name__ == "__main__":
     
     print("This is a module for solving optimization problems using Gurobi.")
-    config = InstanceConfig(is_unified_buffer=False, num_gate=3, num_buffer_in=2, num_buffer_out=2)  # Example: override defaults
+    config = InstanceConfig(is_unified_buffer=True, num_vehicles=20, num_buffer_in=2)  # Example: override defaults
     instance = generate_instance(config)
     
     # Solve by exact gurobi solver
-    # solution = solve(instance, solver="exact")
-    # visualize_result(solution)
+    solution = solve(instance, solver="exact")
+    visualize_result(solution)
         
     # Create simulator
     simulator = VertiportSimulator(instance)
@@ -47,17 +47,17 @@ if __name__ == "__main__":
     # Step-by-step control with FCFS logic
     while not simulator.is_simulation_complete():
         event = simulator.step_to_next_event()
-        
+
         # FCFS scheduling logic here - TODO : improve more - multiple vehicles and multiple resources
         for operation in range(instance.num_operations):
             waiting_vehicles = simulator.get_waiting_vehicles(operation)
             available_resources = simulator.get_available_resources(operation)
-            
+
             # Make assignment decisions
             if waiting_vehicles and available_resources:
                 vehicle = waiting_vehicles[0]  # selection logic
                 resource = available_resources[0]  # selection logic
-                
+
                 if simulator.can_assign_vehicle_to_resource(vehicle.id, resource.id, operation):
                     simulator.assign_vehicle_to_resource_now(vehicle.id, resource.id, operation)
 

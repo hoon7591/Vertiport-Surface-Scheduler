@@ -82,10 +82,12 @@ class SolverStrategy(ABC):
         """Add base constraints common to all solver strategies."""
         num_ops = instance.num_operations
         num_vehicle = instance.num_vehicles
+        num_buffer_out = instance.num_buffer_out
         vehicle_arrival_times = instance.vehicle_arrival_times
         processing_times = instance.proc
         vehicle_planned_arrival_times = instance.vehicle_planned_arrival_times
         vehicle_planned_departure_times = instance.vehicle_planned_departure_times
+        vehicle_planned_gate_close_times = instance.vehicle_planned_gate_close_times
         ST = instance.ST
         big_M = instance.big_M
 
@@ -134,8 +136,11 @@ class SolverStrategy(ABC):
         for i in range(num_vehicle):
             model.addConstr(T_a[i] >= S[0, i] + quicksum(y[0, i, j] * processing_times[0][i][j - resource_ind[0][0]]
                                                          for j in range(resource_ind[0][0], resource_ind[0][1])) - vehicle_planned_arrival_times[i])
-            model.addConstr(S[num_ops - 1, i] >= vehicle_planned_departure_times[i])
-            model.addConstr(T_d[i] == S[num_ops - 1, i] - vehicle_planned_departure_times[i])
+            if num_buffer_out > 0:
+                model.addConstr(S[num_ops - 2, i] >= vehicle_planned_gate_close_times[i])
+            else:
+                model.addConstr(S[num_ops - 1, i] >= vehicle_planned_gate_close_times[i])
+            model.addConstr(T_d[i] >= S[num_ops - 1, i] - vehicle_planned_departure_times[i])
 
     def _extract_solution(self, model: Model, instance: Instance, variables: Dict, solver_name: str) -> Solution:
         """Extract solution from the solved model."""

@@ -3,7 +3,8 @@ import numpy as np
 from dataclasses import dataclass, field
 
 
-# Hyper Parameter Lists for Problem Generation in InstanceConfig
+"""
+Hyper Parameter Lists for Problem Generation in InstanceConfig
 # seed: for fixing random seed
 # num_ops: number of operations in the vertiport service (depending on the existence of buffer_in and buffer_out, the num_ops can be 3, 4, or 5)
 # num_vehicle: number of UAMs supposed to use vertiport
@@ -31,6 +32,7 @@ from dataclasses import dataclass, field
 # ETA_ready_diff: ETA(=due_a) - ready for all vehicles (1D list)
 #                 [nominal, width] (width/2 corresponds to 2-sigma deviation of normal distribution; 95.45% of values are within this range from nominal value)
 # ETD_margin: ETD(=due_d) = ETA + TAT + "ETD_margin"
+# gate_close_margin: ETA + TAT + "gate_close_margin" (for no-early-departure const.)
 # unified_buffer: If True, buffer_in and buffer_out are unified into a single buffer
 
 # Info. of generate_instance function
@@ -47,6 +49,7 @@ from dataclasses import dataclass, field
 # Notes:
 # 1. Time unit is minute
 # 2. If you change 'num_pad', you need to also change 'st_list_r' => len(st_list_r) = num_pad
+"""
 
 
 @dataclass
@@ -64,20 +67,21 @@ class InstanceConfig:
     num_buffer_out: int = 3 # not used for is_unified_buffer = True: if True, this is merged with buffer_in #TODO : revise implicitly
     objective_weights: List[float] = field(default_factory=lambda: [0.5, 0.5])
     proc_air_v: List[float] = field(default_factory=lambda: [2.0, 2.2, 2.8, 3.0])
-    proc_air_r: List[float] = field(default_factory=lambda: [1.0, 0.8])
+    proc_air_r: List[float] = field(default_factory=lambda: [0.8, 0.9, 1.0, 1.0])
     proc_air_o: List[float] = field(default_factory=lambda: [1.2, 1.0])
     proc_gate_v: List[int] = field(default_factory=lambda: [15, 17, 23, 25])
     st_list_v: Any = field(default_factory=lambda: [
         [1.25, 1.0, 1.0, 1.0],
         [1.5, 1.25, 1.0, 1.0],
         [1.75, 1.5, 1.25, 1.0],
-        [2.0, 2.5, 1.25, 1.25]
+        [2.0, 1.75, 1.5, 1.25]
     ])
     st_list_o: List[float] = field(default_factory=lambda: [0.8, 0.6, 0.5, 1.0])
-    st_list_r: List[float] = field(default_factory=lambda: [1.0, 0.7])
+    st_list_r: List[float] = field(default_factory=lambda: [1.0, 0.7, 0.8, 1.0])
     ready_max: float = 100.0
-    ETA_ready_diff: List[float] = field(default_factory=lambda: [3, 10])
+    ETA_ready_diff: List[float] = field(default_factory=lambda: [3, 6])
     ETD_margin: float = 5.0
+    gate_close_margin: float = 3.0
     is_unified_buffer: bool = False
 
 
@@ -101,11 +105,13 @@ class Instance:
         maximum_arrival_time: float, # defines instance's horizon 
         ETA_ready_diff: List[float],
         ETD_margin: float,
+        gate_close_margin: float,
         is_unified_buffer: bool,
         vehicle_arrival_times: np.ndarray,
         proc: list,
         vehicle_planned_arrival_times: np.ndarray,
         vehicle_planned_departure_times: np.ndarray,
+        vehicle_planned_gate_close_times: np.ndarray,
         ST: dict,
         vehicle_type: np.ndarray,
         M: float,
@@ -127,11 +133,13 @@ class Instance:
         self.maximum_arrival_time = maximum_arrival_time
         self.ETA_ready_diff = ETA_ready_diff # TODO : check if it needs?
         self.ETD_margin = ETD_margin # TODO : check if it needs?
+        self.gate_close_margin = gate_close_margin
         self.is_unified_buffer = is_unified_buffer
         self.vehicle_arrival_times = vehicle_arrival_times
         self.proc = proc
         self.vehicle_planned_arrival_times = vehicle_planned_arrival_times
         self.vehicle_planned_departure_times = vehicle_planned_departure_times
+        self.vehicle_planned_gate_close_times = vehicle_planned_gate_close_times
         self.ST = ST
         self.vehicle_type = vehicle_type
         self.big_M = M
@@ -208,6 +216,7 @@ class Instance:
         ETA_ready_diff_arr = config.ETA_ready_diff[0] + config.ETA_ready_diff[0] / 4 * np.random.randn(config.num_vehicles)
         vehicle_planned_arrival_times = ready + ETA_ready_diff_arr
         vehicle_planned_departure_times = vehicle_planned_arrival_times + TAT + config.ETD_margin
+        vehicle_planned_gate_close_times = vehicle_planned_arrival_times + TAT + config.gate_close_margin
 
         o_key_map = {
             0: (0, 0),
@@ -242,6 +251,6 @@ class Instance:
         return cls(
             config.seed, config.num_operations, config.num_vehicles, config.num_pad, config.num_buffer_in, config.num_gate, config.num_buffer_out,
             num_resource, config.objective_weights, config.proc_air_v, config.proc_air_r, config.proc_air_o, config.proc_gate_v,
-            st_list, config.ready_max, config.ETA_ready_diff, config.ETD_margin, config.is_unified_buffer,
-            ready, proc, vehicle_planned_arrival_times, vehicle_planned_departure_times, ST_rounded, vehicle_type, M
+            st_list, config.ready_max, config.ETA_ready_diff, config.ETD_margin, config.gate_close_margin, config.is_unified_buffer,
+            ready, proc, vehicle_planned_arrival_times, vehicle_planned_departure_times, vehicle_planned_gate_close_times, ST_rounded, vehicle_type, M
         )

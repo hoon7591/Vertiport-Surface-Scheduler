@@ -100,6 +100,7 @@ class Vehicle:
     arrival_time: float
     planned_arrival_time: float
     planned_departure_time: float
+    planned_gate_close_time: float
     state: VehicleState = VehicleState.BEFORE_ARRIVAL
     current_operation: int = -1
     current_resource: Optional[int] = None
@@ -240,7 +241,8 @@ class VertiportSimulator:
                 vehicle_type=self.instance.vehicle_type[v_id],
                 arrival_time=self.instance.vehicle_arrival_times[v_id],
                 planned_arrival_time=self.instance.vehicle_planned_arrival_times[v_id],
-                planned_departure_time=self.instance.vehicle_planned_departure_times[v_id]
+                planned_departure_time=self.instance.vehicle_planned_departure_times[v_id],
+                planned_gate_close_time=self.instance.vehicle_planned_gate_close_times[v_id]
             )
             self.vehicles[v_id] = vehicle
             
@@ -448,11 +450,12 @@ class VertiportSimulator:
         local_idx = resource_id - resource_ranges[operation][0]
         if (local_idx < 0 or local_idx >= len(self.instance.proc[operation][vehicle_id])):
             return False
-        
+
         # Check if early departure
-        if operation == (len(resource_ranges)-1):
-            if self.current_time < vehicle.planned_departure_time:
-                return False
+        expected_operation = (len(resource_ranges) - 2) if self.instance.num_buffer_out > 0 \
+            else (len(resource_ranges) - 1)
+        if operation == expected_operation and self.current_time < vehicle.planned_gate_close_time:
+            return False
 
         processing_time = self.instance.proc[operation][vehicle_id][local_idx]
         return processing_time >= 0
@@ -464,7 +467,7 @@ class VertiportSimulator:
         """
         if not self.can_assign_vehicle_to_resource(vehicle_id, resource_id, operation):
             return False
-        
+
         vehicle = self.vehicles[vehicle_id]
 
         # Calculate when operation can start
