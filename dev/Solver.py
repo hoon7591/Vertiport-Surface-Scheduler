@@ -4,6 +4,7 @@ import numpy as np
 from typing import Dict, List, Tuple
 from Solution import Solution
 from Instance import Instance
+from VertiportSimulator import VertiportSimulator
 
 
 class SolverStrategy(ABC):
@@ -185,33 +186,33 @@ class SolverStrategy(ABC):
 
 class ExactSolver(SolverStrategy):
     """Exact solver that guarantees optimal solution."""
-    
+
     def solve(self, instance: Instance) -> Solution:
         model, variables = self._setup_base_model(instance)
-        
+
         # Set objective for exact solver
         weights = instance.objective_weights
         num_vehicle = instance.num_vehicles
         T_a = variables['T_a']
         T_d = variables['T_d']
-        
+
         model.setObjective(quicksum(weights[0] * T_a[i] + weights[1] * T_d[i] for i in range(num_vehicle)), GRB.MINIMIZE)
-        
+
         # Solve the model
         model.optimize()
-        
+
         return self._extract_solution(model, instance, variables, "exact")
 
 class FCFSSolver(SolverStrategy):
     """First-Come-First-Served solver implementation."""
-    
+
     def __init__(self, is_objective_enabled: bool = False, FCFS_for_landing_only: bool = False):
         self.use_gurobi = is_objective_enabled
         self.landing_only = FCFS_for_landing_only
-    
+
     def solve(self, instance: Instance) -> Solution:
         model, variables = self._setup_base_model(instance)
-        
+
         # Set objective only for Gurobi variant
         if self.use_gurobi:
             weights = instance.objective_weights
@@ -219,7 +220,7 @@ class FCFSSolver(SolverStrategy):
             T_a = variables['T_a']
             T_d = variables['T_d']
             model.setObjective(quicksum(weights[0] * T_a[i] + weights[1] * T_d[i] for i in range(num_vehicle)), GRB.MINIMIZE)
-        
+
         # Add FCFS constraints
         if self.landing_only:
             self._add_fcfs_landing_constraints(model, instance, variables)
@@ -227,12 +228,12 @@ class FCFSSolver(SolverStrategy):
         else:
             self._add_fcfs_constraints(model, instance, variables)
             solver_name = "FCFS_Gurobi" if self.use_gurobi else "FCFS_SAT"
-        
+
         # Solve the model
         model.optimize()
-        
+
         return self._extract_solution(model, instance, variables, solver_name)
-    
+
     def _add_fcfs_constraints(self, model, instance: Instance, variables):
         """Add FCFS-specific constraints for all operations."""
         num_ops = instance.num_operations
@@ -241,7 +242,7 @@ class FCFSSolver(SolverStrategy):
         S = variables['S']
         x = variables['x']
         resource_ind = variables['resource_ind']
-        
+
         sorted_vehicle_indices = np.argsort(ready)
         for i in range(num_ops):
             for j in range(num_vehicle - 1):
@@ -251,7 +252,7 @@ class FCFSSolver(SolverStrategy):
                 for j_ in range(j + 1, num_vehicle):
                     for k in range(resource_ind[i][0], resource_ind[i][1]):
                         model.addConstr(x[i, i, sorted_vehicle_indices[j_], sorted_vehicle_indices[j], k] == 0)
-    
+
     def _add_fcfs_landing_constraints(self, model, instance: Instance, variables):
         """Add FCFS landing-specific constraints."""
         num_vehicle = instance.num_vehicles
@@ -259,7 +260,7 @@ class FCFSSolver(SolverStrategy):
         S = variables['S']
         x = variables['x']
         resource_ind = variables['resource_ind']
-        
+
         sorted_vehicle_indices = np.argsort(ready)
         for j in range(num_vehicle - 1):
             model.addConstr(S[0, sorted_vehicle_indices[j]] <= S[0, sorted_vehicle_indices[j + 1]])
@@ -271,14 +272,39 @@ class FCFSSolver(SolverStrategy):
 
 class NoRuleSolver(SolverStrategy):
     """SAT solver without any primary sequencing rule."""
-    
+
     def solve(self, instance: Instance) -> Solution:
         model, variables = self._setup_base_model(instance)
-        
+
         # No objective function set for SAT mode
         model.optimize()
-        
+
         return self._extract_solution(model, instance, variables, "no_rule_SAT")
+
+
+class FCFS_HeuristicSolver:
+    def solve(self, instance: Instance) -> Solution:
+        # Create simulator
+        simulator = VertiportSimulator(instance)
+
+        # Step-by-step control with FCFS logic
+        while not simulator.is_simulation_complete():
+            event = simulator.step_to_next_event()
+
+            # FCFS scheduling logic here - TODO : improve more - multiple vehicles and multiple resources
+            for operation in range(instance.num_operations):
+                waiting_vehicles = simulator.get_waiting_vehicles(operation)
+                available_resources = simulator.get_available_resources(operation)
+
+                # Make assignment decisions
+                if waiting_vehicles and available_resources:
+                    vehicle = waiting_vehicles[0]  # selection logic
+                    resource = available_resources[0]  # selection logic
+
+                    if simulator.can_assign_vehicle_to_resource(vehicle.id, resource.id, operation):
+                        simulator.assign_vehicle_to_resource_now(vehicle.id, resource.id, operation)
+
+        return simulator._generate_solution()
 
 
 # Solver factory with minimal overhead
@@ -289,21 +315,22 @@ _SOLVER_INSTANCES = {
     "FCFS_landing_SAT": FCFSSolver(is_objective_enabled=False, FCFS_for_landing_only=True),
     "FCFS_landing_Gurobi": FCFSSolver(is_objective_enabled=True, FCFS_for_landing_only=True),
     "no_rule_SAT": NoRuleSolver(),
+    "FCFS_heuristic": FCFS_HeuristicSolver(),
 }
 
 
 def solve(instance: Instance, solver: str) -> Solution:
     """
     Solve the vertiport surface scheduling problem using the specified solver strategy.
-    
+
     This function serves as the main entry point for solving optimization problems.
     It uses the Strategy pattern with pre-instantiated solvers for optimal performance.
-    
+
     Args:
         instance: Instance object containing problem data
         solver: String identifier for the solver strategy to use
-                Available options: "exact", "FCFS_Gurobi", "FCFS_landing_Gurobi", 
-                "FCFS_SAT", "FCFS_landing_SAT", "no_rule_SAT"
+                Available options: "exact", "FCFS_Gurobi", "FCFS_landing_Gurobi",
+                "FCFS_SAT", "FCFS_landing_SAT", "no_rule_SAT", "FCFS_heuristic"
     
     Returns:
         Solution: Solution object containing optimization results
