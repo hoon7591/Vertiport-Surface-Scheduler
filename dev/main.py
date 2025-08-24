@@ -3,8 +3,9 @@ from Solver import solve
 from Visualizer import visualize_result
 from Instance import InstanceConfig
 from VertiportSimulator import VertiportSimulator
+from Numerical_Study import ExperimentConfig, Numerical_Experiment
 
-"""""
+"""
 Hyper Parameter Lists for Problem Generation in InstanceConfig
 
 Info. of generate_instance function
@@ -34,11 +35,16 @@ Notes:
 
 
 if __name__ == "__main__":
-    
-    print("This is a module for solving optimization problems using Gurobi.")
-    config = InstanceConfig(is_unified_buffer=True, num_vehicles=20, num_buffer_in=2)  # Example: override defaults
-    instance = generate_instance(config)
-    
-    # Solve by solver
-    solution = solve(instance, solver="FCFS_heuristic")
-    visualize_result(solution)
+
+    # # generate single instance
+    # config = InstanceConfig(is_unified_buffer=True, num_vehicles=10, num_buffer_in=2, num_gate=6, num_pad=2, num_buffer_out=2,
+    #                         ETD_margin=3, gate_close_margin=2, ETA_ready_diff=[3, 2], seed=4)  # Example: override defaults
+    # instance = generate_instance(config)
+    #
+    # # Solve by solver
+    # solution = solve(instance, solver="FCFS_heuristic")
+    # visualize_result(solution)
+
+    # Numerical Study
+    exp_config = ExperimentConfig()
+    Numerical_Experiment(exp_config)

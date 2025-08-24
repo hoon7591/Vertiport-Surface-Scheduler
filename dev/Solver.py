@@ -1,3 +1,4 @@
+import time
 from abc import ABC, abstractmethod
 from gurobipy import GRB, Model, quicksum
 import numpy as np
@@ -143,7 +144,7 @@ class SolverStrategy(ABC):
                 model.addConstr(S[num_ops - 1, i] >= vehicle_planned_gate_close_times[i])
             model.addConstr(T_d[i] >= S[num_ops - 1, i] - vehicle_planned_departure_times[i])
 
-    def _extract_solution(self, model: Model, instance: Instance, variables: Dict, solver_name: str) -> Solution:
+    def _extract_solution(self, model: Model, instance: Instance, variables: Dict, solver_name: str, is_deadlock) -> Solution:
         """Extract solution from the solved model."""
         num_ops = instance.num_operations
         num_vehicle = instance.num_vehicles
@@ -182,7 +183,7 @@ class SolverStrategy(ABC):
             obj_val = weights[0] * sum(arrival_time_tardiness) + weights[1] * sum(departure_time_tardiness)
 
         return Solution(obj_val, runtime, start_times, finish_times, assigned_resources,
-                       arrival_time_tardiness, departure_time_tardiness, resource_ind, solver_name, instance)
+                       arrival_time_tardiness, departure_time_tardiness, resource_ind, solver_name, instance, is_deadlock)
 
 class ExactSolver(SolverStrategy):
     """Exact solver that guarantees optimal solution."""
@@ -201,7 +202,9 @@ class ExactSolver(SolverStrategy):
         # Solve the model
         model.optimize()
 
-        return self._extract_solution(model, instance, variables, "exact")
+        is_deadlock = False
+
+        return self._extract_solution(model, instance, variables, "exact", is_deadlock)
 
 class FCFSSolver(SolverStrategy):
     """First-Come-First-Served solver implementation."""
@@ -232,7 +235,9 @@ class FCFSSolver(SolverStrategy):
         # Solve the model
         model.optimize()
 
-        return self._extract_solution(model, instance, variables, solver_name)
+        is_deadlock = False
+
+        return self._extract_solution(model, instance, variables, solver_name, is_deadlock)
 
     def _add_fcfs_constraints(self, model, instance: Instance, variables):
         """Add FCFS-specific constraints for all operations."""
@@ -279,15 +284,19 @@ class NoRuleSolver(SolverStrategy):
         # No objective function set for SAT mode
         model.optimize()
 
-        return self._extract_solution(model, instance, variables, "no_rule_SAT")
+        is_deadlock = False
+
+        return self._extract_solution(model, instance, variables, "no_rule_SAT", is_deadlock)
 
 
 class FCFS_HeuristicSolver:
     def solve(self, instance: Instance) -> Solution:
         # Create simulator
         simulator = VertiportSimulator(instance)
+        is_deadlock = False
 
         # Step-by-step control with FCFS logic
+        start_time = time.time()
         while not simulator.is_simulation_complete():
             event = simulator.step_to_next_event()
 
@@ -303,8 +312,12 @@ class FCFS_HeuristicSolver:
 
                     if simulator.can_assign_vehicle_to_resource(vehicle.id, resource.id, operation):
                         simulator.assign_vehicle_to_resource_now(vehicle.id, resource.id, operation)
+            current_time = time.time()
+            if current_time - start_time > 0.1:  # Timeout after 0.1 seconds
+                is_deadlock = True
+                break
 
-        return simulator._generate_solution()
+        return simulator._generate_solution(is_deadlock)
 
 
 # Solver factory with minimal overhead

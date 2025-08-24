@@ -831,7 +831,7 @@ class VertiportSimulator:
         
         # Calculate waiting time
         total_processing_time = sum(vehicle.log_operation_finish_times[i] - vehicle.log_start_times[i] 
-                                  for i in range(len(vehicle.log_start_times)))
+                                  for i in range(min(len(vehicle.log_operation_finish_times), len(vehicle.log_start_times))))
         waiting_time = flow_time - total_processing_time
         self.stats['total_waiting_time'] += waiting_time
         
@@ -1081,7 +1081,7 @@ class VertiportSimulator:
                            [num_pad + num_buffer_in + num_gate, num_pad + num_buffer_in + num_gate + num_buffer_out],
                            [0, num_pad]]
     
-    def _generate_solution(self) -> Solution:
+    def _generate_solution(self, is_deadlock) -> Solution:
         """Generate Solution object from simulation results"""
         num_vehicles = self.instance.num_vehicles
         num_operations = self.instance.num_operations
@@ -1131,6 +1131,7 @@ class VertiportSimulator:
             departure_time_tardiness=departure_time_tardiness,
             resource_ind=self._build_resource_ranges(),
             solver_type="DiscreteEventSimulation",
-            instance=self.instance
+            instance=self.instance,
+            is_deadlock=is_deadlock
         )
 

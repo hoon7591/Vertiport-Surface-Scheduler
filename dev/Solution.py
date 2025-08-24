@@ -17,6 +17,7 @@ class Solution:
         solver_type: str,
         # Instance data for induced solution informations
         instance: Optional['Instance'] = None,
+        is_deadlock: bool = False,
     ):
         # Core solver results
         self.obj_val = obj_val
@@ -30,6 +31,7 @@ class Solution:
         self.resource_ind = resource_ind
         # NOTE: refactor to use resource_ind to the mapping of resources to operations ; solver, instance, etc. 
         self.instance = instance
+        self.is_deadlock = is_deadlock
 
         # Physical characteristics and metadata (from instance)
         if instance:
@@ -144,8 +146,8 @@ class Solution:
             'solver': self.solver_type,
         }
         
-        if hasattr(self, 'resource_utilization'):
-            stats['avg_resource_utilization'] = np.mean(list(self.resource_utilization.values()))
-            stats['max_resource_utilization'] = np.max(list(self.resource_utilization.values()))
+        # if hasattr(self, 'resource_utilization'):
+        #     stats['avg_resource_utilization'] = np.mean(list(self.resource_utilization.values()))
+        #     stats['max_resource_utilization'] = np.max(list(self.resource_utilization.values()))
             
         return stats
