@@ -28,6 +28,8 @@ solver: option for solver selction
         - "no_rule_SAT": SAT solver without any primary sequencing rule
         - "FCFS_heuristic": First-Come-First-Served heuristic solver (Discrete Event Simulation)
 
+is_numerical_exp: flag for numerical experiment mode or solving mode for single instance
+
 Notes:
 1. Time unit is minute
 2. If you change 'num_pad', you need to also change 'st_list_r' => len(st_list_r) = num_pad
@@ -37,12 +39,12 @@ Notes:
 if __name__ == "__main__":
 
     # # generate single instance
-    # config = InstanceConfig(is_unified_buffer=True, num_vehicles=10, num_buffer_in=2, num_gate=6, num_pad=2, num_buffer_out=2,
-    #                         ETD_margin=3, gate_close_margin=2, ETA_ready_diff=[3, 2], seed=4)  # Example: override defaults
+    # config = InstanceConfig(is_unified_buffer=False, num_vehicles=15, num_buffer_in=2, num_gate=6, num_pad=2, num_buffer_out=2,
+    #                         ETD_margin=3, gate_close_margin=2, ETA_ready_diff=[3, 2], seed=27)  # Example: override defaults
     # instance = generate_instance(config)
     #
     # # Solve by solver
-    # solution = solve(instance, solver="FCFS_heuristic")
+    # solution = solve(instance, solver="exact", is_numerical_exp=False)
     # visualize_result(solution)
 
     # Numerical Study

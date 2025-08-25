@@ -44,9 +44,10 @@ def Numerical_Experiment(exp_config: ExperimentConfig = ExperimentConfig()):
                                                             seed=seed)
                                     instance = Instance.from_config(config)
                                     num_deadlock = 0
+                                    results = []
                                     for solver_type in ["FCFS_heuristic", "exact", "FCFS_Gurobi", "FCFS_landing_Gurobi",
                                                         "FCFS_SAT", "FCFS_landing_SAT", "no_rule_SAT"]:
-                                        solution = solve(instance, solver=solver_type)
+                                        solution = solve(instance, solver=solver_type, is_numerical_exp=True)
                                         if solver_type == "FCFS_heuristic":
                                             solution.solver_runtime = 0.00
                                         num_deadlock += solution.is_deadlock
@@ -56,7 +57,6 @@ def Numerical_Experiment(exp_config: ExperimentConfig = ExperimentConfig()):
                                         else:
                                             stats = solution.get_summary_stats()
                                             stats.update({
-                                                "num_vehicles": num_vehicles,
                                                 "num_pad": config.num_pad,
                                                 "num_buffer_in": config.num_buffer_in,
                                                 "num_buffer_out": config.num_buffer_out,
@@ -68,16 +68,17 @@ def Numerical_Experiment(exp_config: ExperimentConfig = ExperimentConfig()):
                                                 "seed": seed,
                                                 "prob_num": num_solved_prob,
                                             })
-
-                                            # Initialize writer on first row
-                                            if writer is None:
-                                                writer = csv.DictWriter(f, fieldnames=stats.keys())
-                                                writer.writeheader()
-
-                                            # Write row immediately after solving
-                                            writer.writerow(stats)
-                                            f.flush()  # ensures row is written to disk
+                                            results.append(stats)
 
                                     if num_deadlock == 0:
                                         num_solved_prob += 1
                                         seed += 1
+
+                                        # Initialize writer on first row
+                                        if writer is None:
+                                            writer = csv.DictWriter(f, fieldnames=results[0].keys())
+                                            writer.writeheader()
+
+                                        # Write row immediately after solving
+                                        writer.writerows(results)
+                                        f.flush()  # ensures row is written to disk

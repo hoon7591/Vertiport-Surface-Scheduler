@@ -12,7 +12,7 @@ class SolverStrategy(ABC):
     """Abstract base class for solver strategies."""
     
     @abstractmethod
-    def solve(self, instance: Instance) -> Solution:
+    def solve(self, instance: Instance, is_numerical_exp: bool) -> Solution:
         """Solve the given instance and return a solution."""
         raise NotImplementedError("Subclasses must implement the solve method")
     
@@ -188,7 +188,7 @@ class SolverStrategy(ABC):
 class ExactSolver(SolverStrategy):
     """Exact solver that guarantees optimal solution."""
 
-    def solve(self, instance: Instance) -> Solution:
+    def solve(self, instance: Instance, is_numerical_exp: bool) -> Solution:
         model, variables = self._setup_base_model(instance)
 
         # Set objective for exact solver
@@ -200,9 +200,16 @@ class ExactSolver(SolverStrategy):
         model.setObjective(quicksum(weights[0] * T_a[i] + weights[1] * T_d[i] for i in range(num_vehicle)), GRB.MINIMIZE)
 
         # Solve the model
-        model.optimize()
-
-        is_deadlock = False
+        if is_numerical_exp:
+            model.setParam('TimeLimit', 600)
+            model.optimize()
+            if model.Status == GRB.TIME_LIMIT:
+                is_deadlock = True
+            elif model.Status == GRB.OPTIMAL:
+                is_deadlock = False
+        else:
+            model.optimize()
+            is_deadlock = False
 
         return self._extract_solution(model, instance, variables, "exact", is_deadlock)
 
@@ -213,7 +220,7 @@ class FCFSSolver(SolverStrategy):
         self.use_gurobi = is_objective_enabled
         self.landing_only = FCFS_for_landing_only
 
-    def solve(self, instance: Instance) -> Solution:
+    def solve(self, instance: Instance, is_numerical_exp: bool) -> Solution:
         model, variables = self._setup_base_model(instance)
 
         # Set objective only for Gurobi variant
@@ -233,9 +240,16 @@ class FCFSSolver(SolverStrategy):
             solver_name = "FCFS_Gurobi" if self.use_gurobi else "FCFS_SAT"
 
         # Solve the model
-        model.optimize()
-
-        is_deadlock = False
+        if is_numerical_exp:
+            model.setParam('TimeLimit', 600)
+            model.optimize()
+            if model.Status == GRB.TIME_LIMIT:
+                is_deadlock = True
+            elif model.Status == GRB.OPTIMAL:
+                is_deadlock = False
+        else:
+            model.optimize()
+            is_deadlock = False
 
         return self._extract_solution(model, instance, variables, solver_name, is_deadlock)
 
@@ -278,25 +292,32 @@ class FCFSSolver(SolverStrategy):
 class NoRuleSolver(SolverStrategy):
     """SAT solver without any primary sequencing rule."""
 
-    def solve(self, instance: Instance) -> Solution:
+    def solve(self, instance: Instance, is_numerical_exp: bool) -> Solution:
         model, variables = self._setup_base_model(instance)
 
         # No objective function set for SAT mode
-        model.optimize()
-
-        is_deadlock = False
+        if is_numerical_exp:
+            model.setParam('TimeLimit', 600)
+            model.optimize()
+            if model.Status == GRB.TIME_LIMIT:
+                is_deadlock = True
+            elif model.Status == GRB.OPTIMAL:
+                is_deadlock = False
+        else:
+            model.optimize()
+            is_deadlock = False
 
         return self._extract_solution(model, instance, variables, "no_rule_SAT", is_deadlock)
 
 
-class FCFS_HeuristicSolver:
-    def solve(self, instance: Instance) -> Solution:
+class FCFS_HeuristicSolver(SolverStrategy):
+    def solve(self, instance: Instance, is_numerical_exp: bool) -> Solution:
         # Create simulator
         simulator = VertiportSimulator(instance)
         is_deadlock = False
 
         # Step-by-step control with FCFS logic
-        start_time = time.time()
+        solve_start_time = time.time()
         while not simulator.is_simulation_complete():
             event = simulator.step_to_next_event()
 
@@ -313,7 +334,7 @@ class FCFS_HeuristicSolver:
                     if simulator.can_assign_vehicle_to_resource(vehicle.id, resource.id, operation):
                         simulator.assign_vehicle_to_resource_now(vehicle.id, resource.id, operation)
             current_time = time.time()
-            if current_time - start_time > 0.1:  # Timeout after 0.1 seconds
+            if current_time - solve_start_time > 1.0 and is_numerical_exp:  # Timeout after 0.1 seconds
                 is_deadlock = True
                 break
 
@@ -332,7 +353,7 @@ _SOLVER_INSTANCES = {
 }
 
 
-def solve(instance: Instance, solver: str) -> Solution:
+def solve(instance: Instance, solver: str, is_numerical_exp: bool) -> Solution:
     """
     Solve the vertiport surface scheduling problem using the specified solver strategy.
 
@@ -355,4 +376,4 @@ def solve(instance: Instance, solver: str) -> Solution:
         available_solvers = ", ".join(_SOLVER_INSTANCES.keys())
         raise ValueError(f"Unknown solver type: '{solver}'. Available solvers: {available_solvers}")
     
-    return _SOLVER_INSTANCES[solver].solve(instance)
+    return _SOLVER_INSTANCES[solver].solve(instance, is_numerical_exp)
