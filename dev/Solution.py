@@ -8,6 +8,7 @@ class Solution:
         # Core solver results
         obj_val: float,
         runtime: float,
+        sim_end_time: float,
         start_times: np.ndarray,
         finish_times: np.ndarray,
         assinged_resources: np.ndarray,
@@ -18,11 +19,13 @@ class Solution:
         # Instance data for induced solution informations
         instance: Optional['Instance'] = None,
         is_deadlock: bool = False,
+        is_runtime_over: bool = False,
     ):
         # Core solver results
         self.obj_val = obj_val
         self.solver_type = solver_type
         self.solver_runtime = runtime
+        self.sim_end_time = sim_end_time
         self.start_times = start_times
         self.finish_times = finish_times
         self.assigned_resources = assinged_resources
@@ -32,6 +35,7 @@ class Solution:
         # NOTE: refactor to use resource_ind to the mapping of resources to operations ; solver, instance, etc. 
         self.instance = instance
         self.is_deadlock = is_deadlock
+        self.is_runtime_over = is_runtime_over
 
         # Physical characteristics and metadata (from instance)
         if instance:
@@ -42,6 +46,8 @@ class Solution:
             self.num_buffer_in = instance.num_buffer_in
             self.num_gate = instance.num_gate
             self.num_buffer_out = instance.num_buffer_out
+            self.num_buffer = instance.num_buffer
+            self.is_unified_buffer = instance.is_unified_buffer
             self.vehicle_type = instance.vehicle_type
             self.ready = instance.vehicle_arrival_times
             self.proc = instance.proc
@@ -90,7 +96,7 @@ class Solution:
         if self.num_operations is None:
             return self.finish_times[vehicle, operation]
             
-        if hasattr(self, 'num_buffer_in') and hasattr(self, 'num_buffer_out'):
+        if self.num_buffer_in is not None and self.num_buffer_out is not None:
             if self.num_buffer_in > 0 and self.num_buffer_out > 0:
                 if operation == 1:  # Buffer-In ends at Gate start
                     return self.start_times[vehicle, 2]
@@ -102,6 +108,12 @@ class Solution:
             elif self.num_buffer_in > 0 and self.num_buffer_out == 0:
                 if operation == 1:  # Buffer-In ends at Gate start
                     return self.start_times[vehicle, 2]
+        elif self.num_buffer is not None:
+            if self.num_buffer > 0:
+                if operation == 1:  # Buffer-In ends at Gate start
+                    return self.start_times[vehicle, 2]
+                elif operation == 3:  # Buffer-Out ends at Takeoff start
+                    return self.start_times[vehicle, self.num_operations - 1]
         
         return self.finish_times[vehicle, operation]
     
@@ -144,6 +156,7 @@ class Solution:
             'avg_departure_tardiness': self.total_departure_tardiness / self.num_vehicles if self.num_vehicles is not None and self.num_vehicles > 0 else 0,
             'total_vehicles': self.num_vehicles if self.num_vehicles is not None else 0,
             'solver': self.solver_type,
+            'simulation_end_time': self.sim_end_time,
         }
         
         # if hasattr(self, 'resource_utilization'):

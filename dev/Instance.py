@@ -12,6 +12,7 @@ Hyper Parameter Lists for Problem Generation in InstanceConfig
 # num_buffer_in: capacity of waiting space before occupying a gate
 # num_gate: number of gate/parking(charging) slot in vertiport
 # num_buffer_out: capacity of waiting space before take-off
+# num_buffer: capacity of waiting space in unified buffer case
 # num_resource: number of all resources in vertiport
 # weights: weights in objective function (1D list, len = 2)
 # proc_air_v: processing time of each vehicle type for landing and take-off operations (1D list, len = 4)
@@ -62,9 +63,10 @@ class InstanceConfig:
     num_operations: int = 5
     num_vehicles: int = 20
     num_pad: int = 2
-    num_buffer_in: int = 3
+    num_buffer_in: Any = None
     num_gate: int = 10
-    num_buffer_out: int = 3 # not used for is_unified_buffer = True: if True, this is merged with buffer_in #TODO : revise implicitly
+    num_buffer_out: Any = None # not used for is_unified_buffer = True: if True, this is merged with buffer_in #TODO : revise implicitly
+    num_buffer: Any = None # only used for is_unified_buffer = True
     objective_weights: List[float] = field(default_factory=lambda: [0.5, 0.5])
     proc_air_v: List[float] = field(default_factory=lambda: [2.0, 2.2, 2.8, 3.0])
     proc_air_r: List[float] = field(default_factory=lambda: [0.8, 0.9, 1.0, 1.0])
@@ -95,6 +97,7 @@ class Instance:
         num_buffer_in: int,
         num_gate: int,
         num_buffer_out: int,
+        num_buffer: Any,
         num_resource: int,
         objective_weights: List[float],
         proc_air_v: List[float],
@@ -123,6 +126,7 @@ class Instance:
         self.num_buffer_in = num_buffer_in
         self.num_gate = num_gate
         self.num_buffer_out = num_buffer_out
+        self.num_buffer = num_buffer
         self.num_resource = num_resource
         self.objective_weights = objective_weights
         self.proc_air_v = proc_air_v
@@ -148,15 +152,26 @@ class Instance:
     def from_config(cls, config: "InstanceConfig") -> "Instance":
         np.random.seed(config.seed)
         if config.is_unified_buffer:
-            num_resource = config.num_pad + config.num_buffer_in + config.num_gate
+            num_resource = config.num_pad + config.num_buffer + config.num_gate
         else:
             num_resource = config.num_pad + config.num_buffer_in + config.num_gate + config.num_buffer_out
 
         if config.is_unified_buffer:
-            if config.num_buffer_in == 0:
-                config.num_buffer_out = config.num_buffer_in
-            elif config.num_buffer_out == 0:
-                config.num_buffer_in = config.num_buffer_out
+            if config.num_buffer is None or config.num_buffer == 0:
+                config.num_operations = 3
+            else:
+                config.num_operations = 5
+        else:
+            if config.num_buffer_in is None or config.num_buffer_in == 0:
+                if config.num_buffer_out is None or config.num_buffer_out == 0:
+                    config.num_operations = 3
+                else:
+                    config.num_operations = 4
+            else:
+                if config.num_buffer_out is None or config.num_buffer_out == 0:
+                    config.num_operations = 4
+                else:
+                    config.num_operations = 5
 
         # Build st_list from config
         st_list = [
@@ -178,10 +193,20 @@ class Instance:
             for j in range(config.num_pad):
                 proc_landing[i][j] = config.proc_air_o[0] * config.proc_air_v[vehicle_type[i]] * config.proc_air_r[j]
 
-        if config.num_buffer_in > 0:
-            proc_buffer_in = np.zeros((config.num_vehicles, config.num_buffer_in))
+        if config.is_unified_buffer:
+            if config.num_buffer > 0:
+                proc_buffer = np.zeros((config.num_vehicles, config.num_buffer))
+            else:
+                proc_buffer = np.zeros((config.num_vehicles, 0))
         else:
-            proc_buffer_in = np.zeros((config.num_vehicles, 0))
+            if config.num_buffer_in > 0:
+                proc_buffer_in = np.zeros((config.num_vehicles, config.num_buffer_in))
+            else:
+                proc_buffer_in = np.zeros((config.num_vehicles, 0))
+            if config.num_buffer_out > 0:
+                proc_buffer_out = np.zeros((config.num_vehicles, config.num_buffer_out))
+            else:
+                proc_buffer_out = np.zeros((config.num_vehicles, 0))
 
         proc_gate = np.zeros((config.num_vehicles, config.num_gate))
         TAT = np.zeros(config.num_vehicles)
@@ -192,26 +217,27 @@ class Instance:
             for j in range(config.num_gate):
                 proc_gate[i][j] = proc_gate[i][0] + 0.15 * (j + 1)
 
-        if config.num_buffer_out > 0:
-            proc_buffer_out = np.zeros((config.num_vehicles, config.num_buffer_out))
-        else:
-            proc_buffer_out = np.zeros((config.num_vehicles, 0))
-
         proc_takeoff = np.zeros((config.num_vehicles, config.num_pad))
         for i in range(config.num_vehicles):
             for j in range(config.num_pad):
                 proc_takeoff[i][j] = config.proc_air_o[1] * config.proc_air_v[vehicle_type[i]] * config.proc_air_r[j]
 
-        if config.num_buffer_in == 0:
-            if config.num_buffer_out == 0:
+        if config.is_unified_buffer:
+            if config.num_buffer == 0:
                 proc = [proc_landing, proc_gate, proc_takeoff]
             else:
-                proc = [proc_landing, proc_gate, proc_buffer_out, proc_takeoff]
+                proc = [proc_landing, proc_buffer, proc_gate, proc_buffer, proc_takeoff]
         else:
-            if config.num_buffer_out == 0:
-                proc = [proc_landing, proc_buffer_in, proc_gate, proc_takeoff]
+            if config.num_buffer_in == 0:
+                if config.num_buffer_out == 0:
+                    proc = [proc_landing, proc_gate, proc_takeoff]
+                else:
+                    proc = [proc_landing, proc_gate, proc_buffer_out, proc_takeoff]
             else:
-                proc = [proc_landing, proc_buffer_in, proc_gate, proc_buffer_out, proc_takeoff]
+                if config.num_buffer_out == 0:
+                    proc = [proc_landing, proc_buffer_in, proc_gate, proc_takeoff]
+                else:
+                    proc = [proc_landing, proc_buffer_in, proc_gate, proc_buffer_out, proc_takeoff]
 
         ETA_ready_diff_arr = config.ETA_ready_diff[0] + config.ETA_ready_diff[0] / 4 * np.random.randn(config.num_vehicles)
         vehicle_planned_arrival_times = ready + ETA_ready_diff_arr
@@ -249,8 +275,9 @@ class Instance:
         M = config.ready_max + (proc_landing.sum() / config.num_pad + proc_gate.sum() / config.num_gate + proc_takeoff.sum() / config.num_pad) / 2
 
         return cls(
-            config.seed, config.num_operations, config.num_vehicles, config.num_pad, config.num_buffer_in, config.num_gate, config.num_buffer_out,
-            num_resource, config.objective_weights, config.proc_air_v, config.proc_air_r, config.proc_air_o, config.proc_gate_v,
-            st_list, config.ready_max, config.ETA_ready_diff, config.ETD_margin, config.gate_close_margin, config.is_unified_buffer,
-            ready, proc, vehicle_planned_arrival_times, vehicle_planned_departure_times, vehicle_planned_gate_close_times, ST_rounded, vehicle_type, M
+            config.seed, config.num_operations, config.num_vehicles, config.num_pad, config.num_buffer_in, config.num_gate,
+            config.num_buffer_out, config.num_buffer, num_resource, config.objective_weights, config.proc_air_v, config.proc_air_r,
+            config.proc_air_o, config.proc_gate_v, st_list, config.ready_max, config.ETA_ready_diff, config.ETD_margin,
+            config.gate_close_margin, config.is_unified_buffer, ready, proc, vehicle_planned_arrival_times,
+            vehicle_planned_departure_times, vehicle_planned_gate_close_times, ST_rounded, vehicle_type, M
         )

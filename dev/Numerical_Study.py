@@ -32,45 +32,70 @@ def Numerical_Experiment(exp_config: ExperimentConfig = ExperimentConfig()):
                                 num_solved_prob = 0
                                 seed = 0
                                 while num_solved_prob < 100:
-                                    config = InstanceConfig(num_vehicles=num_vehicles,
-                                                            num_pad=num_vehicles_pad_buffer_gate_exp_list[-2],
-                                                            num_buffer_in=num_vehicles_pad_buffer_gate_exp_list[-2],
-                                                            num_buffer_out=num_vehicles_pad_buffer_gate_exp_list[-2],
-                                                            num_gate=num_vehicles_pad_buffer_gate_exp_list[-1],
-                                                            ETD_margin=ETD_margin,
-                                                            gate_close_margin=ETD_margin - ETD_margin_minus_NED,
-                                                            ETA_ready_diff=[3, ETA_ready_diff_sigma],
-                                                            is_unified_buffer=is_unified_buffer,
-                                                            seed=seed)
+                                    if is_unified_buffer:
+                                        config = InstanceConfig(num_vehicles=num_vehicles,
+                                                                num_pad=num_vehicles_pad_buffer_gate_exp_list[-2],
+                                                                num_buffer=num_vehicles_pad_buffer_gate_exp_list[-2],
+                                                                num_gate=num_vehicles_pad_buffer_gate_exp_list[-1],
+                                                                ETD_margin=ETD_margin,
+                                                                gate_close_margin=ETD_margin - ETD_margin_minus_NED,
+                                                                ETA_ready_diff=[3, ETA_ready_diff_sigma],
+                                                                is_unified_buffer=is_unified_buffer,
+                                                                seed=seed)
+                                    else:
+                                        config = InstanceConfig(num_vehicles=num_vehicles,
+                                                                num_pad=num_vehicles_pad_buffer_gate_exp_list[-2],
+                                                                num_buffer_in=num_vehicles_pad_buffer_gate_exp_list[-2],
+                                                                num_buffer_out=num_vehicles_pad_buffer_gate_exp_list[-2],
+                                                                num_gate=num_vehicles_pad_buffer_gate_exp_list[-1],
+                                                                ETD_margin=ETD_margin,
+                                                                gate_close_margin=ETD_margin - ETD_margin_minus_NED,
+                                                                ETA_ready_diff=[3, ETA_ready_diff_sigma],
+                                                                is_unified_buffer=is_unified_buffer,
+                                                                seed=seed)
                                     instance = Instance.from_config(config)
                                     num_deadlock = 0
+                                    num_runtime_over = 0
                                     results = []
                                     for solver_type in ["FCFS_heuristic", "exact", "FCFS_Gurobi", "FCFS_landing_Gurobi",
                                                         "FCFS_SAT", "FCFS_landing_SAT", "no_rule_SAT"]:
                                         solution = solve(instance, solver=solver_type, is_numerical_exp=True)
-                                        if solver_type == "FCFS_heuristic":
-                                            solution.solver_runtime = 0.00
                                         num_deadlock += solution.is_deadlock
-                                        if solution.is_deadlock:
+                                        num_runtime_over += solution.is_runtime_over
+                                        if solution.is_deadlock or solution.is_runtime_over:
                                             seed += 1
                                             break
                                         else:
                                             stats = solution.get_summary_stats()
-                                            stats.update({
-                                                "num_pad": config.num_pad,
-                                                "num_buffer_in": config.num_buffer_in,
-                                                "num_buffer_out": config.num_buffer_out,
-                                                "num_gate": config.num_gate,
-                                                "ETD_margin": ETD_margin,
-                                                "gate_close_margin": config.gate_close_margin,
-                                                "ETA_ready_diff": config.ETA_ready_diff,
-                                                "is_unified_buffer": is_unified_buffer,
-                                                "seed": seed,
-                                                "prob_num": num_solved_prob,
-                                            })
+                                            if is_unified_buffer:
+                                                stats.update({
+                                                    "num_pad": config.num_pad,
+                                                    "num_buffer_in": config.num_buffer,
+                                                    "num_buffer_out": config.num_buffer,
+                                                    "num_gate": config.num_gate,
+                                                    "ETD_margin": ETD_margin,
+                                                    "gate_close_margin": config.gate_close_margin,
+                                                    "ETA_ready_diff": config.ETA_ready_diff,
+                                                    "is_unified_buffer": is_unified_buffer,
+                                                    "seed": seed,
+                                                    "prob_num": num_solved_prob,
+                                                })
+                                            else:
+                                                stats.update({
+                                                    "num_pad": config.num_pad,
+                                                    "num_buffer_in": config.num_buffer_in,
+                                                    "num_buffer_out": config.num_buffer_out,
+                                                    "num_gate": config.num_gate,
+                                                    "ETD_margin": ETD_margin,
+                                                    "gate_close_margin": config.gate_close_margin,
+                                                    "ETA_ready_diff": config.ETA_ready_diff,
+                                                    "is_unified_buffer": is_unified_buffer,
+                                                    "seed": seed,
+                                                    "prob_num": num_solved_prob,
+                                                })
                                             results.append(stats)
 
-                                    if num_deadlock == 0:
+                                    if num_deadlock == 0 and num_runtime_over == 0:
                                         num_solved_prob += 1
                                         seed += 1
 

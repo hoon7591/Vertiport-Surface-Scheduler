@@ -24,7 +24,7 @@ class EventType(Enum):
     OPERATION_START = auto()
     OPERATION_COMPLETE = auto()
     RESOURCE_AVAILABLE = auto()  # Unified event for resource availability (replaces both old RESOURCE_AVAILABLE and SEPARATION_TIME_UPDATE)
-    PLANNED_DEPARTURE_REACHED = auto()
+    NED_REACHED = auto()
     VEHICLE_DEPARTURE = auto()
     SIMULATION_END = auto()
 
@@ -255,10 +255,10 @@ class VertiportSimulator:
             )
             heapq.heappush(self.event_queue, arrival_event)
 
-            # Schdule ETD reached event
+            # Scheduled NED reached event
             departure_event = Event(
-                time = vehicle.planned_departure_time,
-                event_type = EventType.PLANNED_DEPARTURE_REACHED,
+                time = vehicle.planned_gate_close_time,
+                event_type = EventType.NED_REACHED,
                 vehicle_id = v_id,
                 event_id = self._get_next_event_id()
             )
@@ -421,7 +421,7 @@ class VertiportSimulator:
         
         for res_id in range(start_idx, end_idx):
             resource = self.resources[res_id]
-            if resource.state == ResourceState.IDLE:
+            if resource.state == ResourceState.IDLE or resource.state == ResourceState.SEPARATION_DELAY:
                 available.append(resource)
         
         return available
@@ -452,8 +452,13 @@ class VertiportSimulator:
             return False
 
         # Check if early departure
-        expected_operation = (len(resource_ranges) - 2) if self.instance.num_buffer_out > 0 \
-            else (len(resource_ranges) - 1)
+        if self.instance.is_unified_buffer:
+            expected_operation = (len(resource_ranges) - 2) if self.instance.num_buffer > 0 \
+                else (len(resource_ranges) - 1)
+        else:
+            expected_operation = (len(resource_ranges) - 2) if self.instance.num_buffer_out > 0 \
+                else (len(resource_ranges) - 1)
+
         if operation == expected_operation and self.current_time < vehicle.planned_gate_close_time:
             return False
 
@@ -573,12 +578,20 @@ class VertiportSimulator:
             resource_id += 1
         
         # Buffer-in areas
-        for _ in range(self.instance.num_buffer_in):
-            self.resources[resource_id] = Resource(
-                id=resource_id,
-                resource_type='buffer_in'
-            )
-            resource_id += 1
+        if self.instance.is_unified_buffer:
+            for _ in range(self.instance.num_buffer):
+                self.resources[resource_id] = Resource(
+                    id=resource_id,
+                    resource_type='buffer_in'
+                )
+                resource_id += 1
+        else:
+            for _ in range(self.instance.num_buffer_in):
+                self.resources[resource_id] = Resource(
+                    id=resource_id,
+                    resource_type='buffer_in'
+                )
+                resource_id += 1
         
         # Gates
         for _ in range(self.instance.num_gate):
@@ -589,7 +602,14 @@ class VertiportSimulator:
             resource_id += 1
         
         # Buffer-out areas (if not unified)
-        if not self.instance.is_unified_buffer:
+        if self.instance.is_unified_buffer:
+            for _ in range(self.instance.num_buffer):
+                self.resources[resource_id] = Resource(
+                    id=resource_id,
+                    resource_type='buffer_out'
+                )
+                resource_id += 1
+        else:
             for _ in range(self.instance.num_buffer_out):
                 self.resources[resource_id] = Resource(
                     id=resource_id,
@@ -609,8 +629,8 @@ class VertiportSimulator:
             self._handle_operation_complete(event)
         elif event.event_type == EventType.RESOURCE_AVAILABLE:
             self._handle_resource_available(event)
-        elif event.event_type == EventType.PLANNED_DEPARTURE_REACHED:
-            self._handle_planned_departure_reached(event)
+        elif event.event_type == EventType.NED_REACHED:
+            self._handle_NED_REACHED(event)
         elif event.event_type == EventType.VEHICLE_DEPARTURE:
             self._handle_vehicle_departure(event)
     
@@ -808,10 +828,10 @@ class VertiportSimulator:
         
         # Note: Resource assignment is handled externally
     
-    def _handle_planned_departure_reached(self, event: Event):
-        """Handle planned departure reached event."""
+    def _handle_NED_REACHED(self, event: Event):
+        """Handle No Early Departure time reached event."""
         vehicle = self.vehicles[event.vehicle_id]
-        self.logger.debug("Planned departure time reached for vehicle %d at time %.2f", vehicle.id, self.current_time)
+        self.logger.debug("No Early Departure time reached for vehicle %d at time %.2f", vehicle.id, self.current_time)
 
     def _handle_vehicle_departure(self, event: Event):
         """Handle aircraft departure from vertiport"""
@@ -1055,15 +1075,16 @@ class VertiportSimulator:
         num_buffer_in = self.instance.num_buffer_in
         num_gate = self.instance.num_gate
         num_buffer_out = self.instance.num_buffer_out
+        num_buffer = self.instance.num_buffer
         is_unified_buffer = self.instance.is_unified_buffer
 
         if is_unified_buffer:
-            if num_buffer_in == 0:
+            if num_buffer == 0:
                 return [[0, num_pad], [num_pad, num_pad + num_gate], [0, num_pad]]
             else:
-                return [[0, num_pad], [num_pad, num_pad + num_buffer_in],
-                       [num_pad + num_buffer_in, num_pad + num_buffer_in + num_gate],
-                       [num_pad, num_pad + num_buffer_in], [0, num_pad]]
+                return [[0, num_pad], [num_pad, num_pad + num_buffer],
+                       [num_pad + num_buffer, num_pad + num_buffer + num_gate],
+                       [num_pad, num_pad + num_buffer], [0, num_pad]]
         else:
             if num_buffer_in == 0:
                 if num_buffer_out == 0:
@@ -1081,7 +1102,7 @@ class VertiportSimulator:
                            [num_pad + num_buffer_in + num_gate, num_pad + num_buffer_in + num_gate + num_buffer_out],
                            [0, num_pad]]
     
-    def _generate_solution(self, is_deadlock) -> Solution:
+    def _generate_solution(self, runtime, is_deadlock, is_runtime_over) -> Solution:
         """Generate Solution object from simulation results"""
         num_vehicles = self.instance.num_vehicles
         num_operations = self.instance.num_operations
@@ -1119,11 +1140,12 @@ class VertiportSimulator:
                   weights[1] * departure_time_tardiness.sum())
         
         # Calculate total simulation time
-        runtime = self.current_time
+        sim_end_time = self.current_time
         
         return Solution(
             obj_val=obj_val,
             runtime=runtime,
+            sim_end_time=sim_end_time,
             start_times=start_times,
             finish_times=finish_times,
             assinged_resources=assigned_resources,
@@ -1132,6 +1154,7 @@ class VertiportSimulator:
             resource_ind=self._build_resource_ranges(),
             solver_type="DiscreteEventSimulation",
             instance=self.instance,
-            is_deadlock=is_deadlock
+            is_deadlock=is_deadlock,
+            is_runtime_over=is_runtime_over
         )
 

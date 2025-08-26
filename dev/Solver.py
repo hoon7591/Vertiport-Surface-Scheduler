@@ -52,15 +52,16 @@ class SolverStrategy(ABC):
         num_buffer_in = instance.num_buffer_in
         num_gate = instance.num_gate
         num_buffer_out = instance.num_buffer_out
+        num_buffer = instance.num_buffer
         is_unified_buffer = instance.is_unified_buffer
 
         if is_unified_buffer:
-            if num_buffer_in == 0:
+            if num_buffer == 0:
                 resource_ind = [[0, num_pad], [num_pad, num_pad + num_gate], [0, num_pad]]
             else:
-                resource_ind = [[0, num_pad], [num_pad, num_pad + num_buffer_in],
-                               [num_pad + num_buffer_in, num_pad + num_buffer_in + num_gate],
-                               [num_pad, num_pad + num_buffer_in],
+                resource_ind = [[0, num_pad], [num_pad, num_pad + num_buffer],
+                               [num_pad + num_buffer, num_pad + num_buffer + num_gate],
+                               [num_pad, num_pad + num_buffer],
                                [0, num_pad]]
         else:
             if num_buffer_in == 0:
@@ -85,6 +86,8 @@ class SolverStrategy(ABC):
         num_ops = instance.num_operations
         num_vehicle = instance.num_vehicles
         num_buffer_out = instance.num_buffer_out
+        num_buffer = instance.num_buffer
+        is_unified_buffer = instance.is_unified_buffer
         vehicle_arrival_times = instance.vehicle_arrival_times
         processing_times = instance.proc
         vehicle_planned_arrival_times = instance.vehicle_planned_arrival_times
@@ -138,13 +141,20 @@ class SolverStrategy(ABC):
         for i in range(num_vehicle):
             model.addConstr(T_a[i] >= S[0, i] + quicksum(y[0, i, j] * processing_times[0][i][j - resource_ind[0][0]]
                                                          for j in range(resource_ind[0][0], resource_ind[0][1])) - vehicle_planned_arrival_times[i])
-            if num_buffer_out > 0:
-                model.addConstr(S[num_ops - 2, i] >= vehicle_planned_gate_close_times[i])
+            if is_unified_buffer:
+                if num_buffer > 0:
+                    model.addConstr(S[num_ops - 2, i] >= vehicle_planned_gate_close_times[i])
+                else:
+                    model.addConstr(S[num_ops - 1, i] >= vehicle_planned_gate_close_times[i])
             else:
-                model.addConstr(S[num_ops - 1, i] >= vehicle_planned_gate_close_times[i])
+                if num_buffer_out > 0:
+                    model.addConstr(S[num_ops - 2, i] >= vehicle_planned_gate_close_times[i])
+                else:
+                    model.addConstr(S[num_ops - 1, i] >= vehicle_planned_gate_close_times[i])
+
             model.addConstr(T_d[i] >= S[num_ops - 1, i] - vehicle_planned_departure_times[i])
 
-    def _extract_solution(self, model: Model, instance: Instance, variables: Dict, solver_name: str, is_deadlock) -> Solution:
+    def _extract_solution(self, model: Model, instance: Instance, variables: Dict, solver_name: str, is_deadlock, is_runtime_over) -> Solution:
         """Extract solution from the solved model."""
         num_ops = instance.num_operations
         num_vehicle = instance.num_vehicles
@@ -178,12 +188,15 @@ class SolverStrategy(ABC):
                         finish_times[i, j] += proc[j][i][k - resource_ind[j][0]]
                         assigned_resources[i, j] = k
 
+        sim_end_time = np.max(finish_times)
+
         # Calculate objective value for SAT-based solvers
         if solver_name in ["FCFS_SAT", "FCFS_landing_SAT", "no_rule_SAT"]:
             obj_val = weights[0] * sum(arrival_time_tardiness) + weights[1] * sum(departure_time_tardiness)
 
-        return Solution(obj_val, runtime, start_times, finish_times, assigned_resources,
-                       arrival_time_tardiness, departure_time_tardiness, resource_ind, solver_name, instance, is_deadlock)
+        return Solution(obj_val, runtime, sim_end_time, start_times, finish_times, assigned_resources,
+                        arrival_time_tardiness, departure_time_tardiness, resource_ind, solver_name, instance,
+                        is_deadlock, is_runtime_over)
 
 class ExactSolver(SolverStrategy):
     """Exact solver that guarantees optimal solution."""
@@ -204,14 +217,16 @@ class ExactSolver(SolverStrategy):
             model.setParam('TimeLimit', 600)
             model.optimize()
             if model.Status == GRB.TIME_LIMIT:
-                is_deadlock = True
+                is_runtime_over = True
             elif model.Status == GRB.OPTIMAL:
-                is_deadlock = False
+                is_runtime_over = False
         else:
             model.optimize()
-            is_deadlock = False
+            is_runtime_over = False
 
-        return self._extract_solution(model, instance, variables, "exact", is_deadlock)
+        is_deadlock = False
+
+        return self._extract_solution(model, instance, variables, "exact", is_deadlock, is_runtime_over)
 
 class FCFSSolver(SolverStrategy):
     """First-Come-First-Served solver implementation."""
@@ -244,14 +259,16 @@ class FCFSSolver(SolverStrategy):
             model.setParam('TimeLimit', 600)
             model.optimize()
             if model.Status == GRB.TIME_LIMIT:
-                is_deadlock = True
+                is_runtime_over = True
             elif model.Status == GRB.OPTIMAL:
-                is_deadlock = False
+                is_runtime_over = False
         else:
             model.optimize()
-            is_deadlock = False
+            is_runtime_over = False
 
-        return self._extract_solution(model, instance, variables, solver_name, is_deadlock)
+        is_deadlock = False
+
+        return self._extract_solution(model, instance, variables, solver_name, is_deadlock, is_runtime_over)
 
     def _add_fcfs_constraints(self, model, instance: Instance, variables):
         """Add FCFS-specific constraints for all operations."""
@@ -300,14 +317,16 @@ class NoRuleSolver(SolverStrategy):
             model.setParam('TimeLimit', 600)
             model.optimize()
             if model.Status == GRB.TIME_LIMIT:
-                is_deadlock = True
+                is_runtime_over = True
             elif model.Status == GRB.OPTIMAL:
-                is_deadlock = False
+                is_runtime_over = False
         else:
             model.optimize()
-            is_deadlock = False
+            is_runtime_over = False
 
-        return self._extract_solution(model, instance, variables, "no_rule_SAT", is_deadlock)
+        is_deadlock = False
+
+        return self._extract_solution(model, instance, variables, "no_rule_SAT", is_deadlock, is_runtime_over)
 
 
 class FCFS_HeuristicSolver(SolverStrategy):
@@ -315,6 +334,7 @@ class FCFS_HeuristicSolver(SolverStrategy):
         # Create simulator
         simulator = VertiportSimulator(instance)
         is_deadlock = False
+        is_runtime_over = False
 
         # Step-by-step control with FCFS logic
         solve_start_time = time.time()
@@ -328,17 +348,27 @@ class FCFS_HeuristicSolver(SolverStrategy):
 
                 # Make assignment decisions
                 if waiting_vehicles and available_resources:
-                    vehicle = waiting_vehicles[0]  # selection logic
-                    resource = available_resources[0]  # selection logic
+                    break_flag = False
+                    for i in range(len(waiting_vehicles)):
+                        for j in range(len(available_resources)):
+                            vehicle = waiting_vehicles[i]  # selection logic
+                            resource = available_resources[j]  # selection logic
 
-                    if simulator.can_assign_vehicle_to_resource(vehicle.id, resource.id, operation):
-                        simulator.assign_vehicle_to_resource_now(vehicle.id, resource.id, operation)
-            current_time = time.time()
-            if current_time - solve_start_time > 1.0 and is_numerical_exp:  # Timeout after 0.1 seconds
+                            if simulator.can_assign_vehicle_to_resource(vehicle.id, resource.id, operation):
+                                simulator.assign_vehicle_to_resource_now(vehicle.id, resource.id, operation)
+                                break_flag = True
+                                break
+                        if break_flag:
+                            break
+
+            if event is None and len(available_resources) == 0 and simulator.is_simulation_complete() is False and is_numerical_exp:
                 is_deadlock = True
                 break
 
-        return simulator._generate_solution(is_deadlock)
+        solve_end_time = time.time()
+        runtime = solve_end_time - solve_start_time
+
+        return simulator._generate_solution(runtime, is_deadlock, is_runtime_over)
 
 
 # Solver factory with minimal overhead

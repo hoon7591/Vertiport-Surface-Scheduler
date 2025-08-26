@@ -33,12 +33,15 @@ is_numerical_exp: flag for numerical experiment mode or solving mode for single 
 Notes:
 1. Time unit is minute
 2. If you change 'num_pad', you need to also change 'st_list_r' => len(st_list_r) = num_pad
+3. If you want to construct 'unified_buffer' model, you need to insert 'num_buffer' only,
+   otherwise, you need to insert 'num_buffer_in' and 'num_buffer_out'
 """
 
 
 if __name__ == "__main__":
 
     # # generate single instance
+    # config = InstanceConfig(is_unified_buffer=True, num_vehicles=20, num_buffer=2)
     # config = InstanceConfig(is_unified_buffer=False, num_vehicles=15, num_buffer_in=2, num_gate=6, num_pad=2, num_buffer_out=2,
     #                         ETD_margin=3, gate_close_margin=2, ETA_ready_diff=[3, 2], seed=27)  # Example: override defaults
     # instance = generate_instance(config)

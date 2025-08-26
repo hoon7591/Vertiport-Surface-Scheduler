@@ -2,22 +2,30 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
 
-def _get_operation_display_info(num_buffer_in, num_buffer_out):
+def _get_operation_display_info(is_unified_buffer, num_buffer_in, num_buffer_out, num_buffer):
     """Get operation labels and colors for visualization based on buffer configuration"""
-    if num_buffer_in == 0:
-        if num_buffer_out == 0:
+    if is_unified_buffer:
+        if num_buffer == 0:
             colors = ['#66c2a5', '#8da0cb', '#a6d854']
             operation_labels = ['Landing', 'Gate', 'Take-Off']
         else:
-            colors = ['#66c2a5', '#8da0cb', '#e78ac3', '#a6d854']
-            operation_labels = ['Landing', 'Gate', 'Buffer-Out', 'Take-Off']
-    else:
-        if num_buffer_out == 0:
-            colors = ['#66c2a5', '#fc8d62', '#8da0cb', '#a6d854']
-            operation_labels = ['Landing', 'Buffer-In', 'Gate', 'Take-Off']
-        else:
             colors = ['#66c2a5', '#fc8d62', '#8da0cb', '#e78ac3', '#a6d854']
             operation_labels = ['Landing', 'Buffer-In', 'Gate', 'Buffer-Out', 'Take-Off']
+    else:
+        if num_buffer_in == 0:
+            if num_buffer_out == 0:
+                colors = ['#66c2a5', '#8da0cb', '#a6d854']
+                operation_labels = ['Landing', 'Gate', 'Take-Off']
+            else:
+                colors = ['#66c2a5', '#8da0cb', '#e78ac3', '#a6d854']
+                operation_labels = ['Landing', 'Gate', 'Buffer-Out', 'Take-Off']
+        else:
+            if num_buffer_out == 0:
+                colors = ['#66c2a5', '#fc8d62', '#8da0cb', '#a6d854']
+                operation_labels = ['Landing', 'Buffer-In', 'Gate', 'Take-Off']
+            else:
+                colors = ['#66c2a5', '#fc8d62', '#8da0cb', '#e78ac3', '#a6d854']
+                operation_labels = ['Landing', 'Buffer-In', 'Gate', 'Buffer-Out', 'Take-Off']
             
     return operation_labels, colors
 
@@ -29,10 +37,13 @@ def visualize_result(solution):
     num_vehicles = solution.num_vehicles
     num_buffer_in = solution.num_buffer_in
     num_buffer_out = solution.num_buffer_out
+    num_buffer = solution.num_buffer
+    is_unified_buffer = solution.is_unified_buffer
     
     # Core solution data
     obj_val = solution.obj_val
     solver_runtime = solution.solver_runtime
+    sim_end_time = solution.sim_end_time
     start_times = solution.start_times
     assigned_resources = solution.assigned_resources
     arrival_tardiness = solution.arrival_time_tardiness
@@ -47,7 +58,7 @@ def visualize_result(solution):
     planned_gate_closing_times = solution.vehicle_planned_gate_close_times
     
     # Generate visualization info
-    operation_labels, colors = _get_operation_display_info(num_buffer_in, num_buffer_out)
+    operation_labels, colors = _get_operation_display_info(is_unified_buffer, num_buffer_in, num_buffer_out, num_buffer)
     tardiness_color = '#d62728'
 
     _, ax = plt.subplots(figsize=(20, 12))
@@ -102,10 +113,16 @@ def visualize_result(solution):
 
     for v in range(num_vehicles):
         landing_resource_idx = int(assigned_resources[v][0])
-        if num_buffer_out > 0:
-            gate_resource_idx = int(assigned_resources[v][num_operations - 3])
+        if is_unified_buffer:
+            if num_buffer > 0:
+                gate_resource_idx = int(assigned_resources[v][num_operations - 3])
+            else:
+                gate_resource_idx = int(assigned_resources[v][num_operations - 2])
         else:
-            gate_resource_idx = int(assigned_resources[v][num_operations - 2])
+            if num_buffer_out > 0:
+                gate_resource_idx = int(assigned_resources[v][num_operations - 3])
+            else:
+                gate_resource_idx = int(assigned_resources[v][num_operations - 2])
         takeoff_resource_idx = int(assigned_resources[v][num_operations - 1])
         y_landing = landing_resource_idx
         y_gate = gate_resource_idx
@@ -138,7 +155,7 @@ def visualize_result(solution):
     ax.set_ylim(-1, num_resources + 1)
     ax.set_title(f"Resource-Centric Gantt | Obj: {obj_val:.2f}, "
                  f"Total AT: {solution.total_arrival_tardiness:.2f}, Total DT: {solution.total_departure_tardiness:.2f}, "
-                 f"Runtime: {solver_runtime:.2f}s, Solver: {solver_type}")
+                 f"Runtime: {solver_runtime:.2f}s, Sim End Time: {sim_end_time:.2f}min, Solver: {solver_type}")
 
     # Legend
     legend_ops = [mpatches.Patch(color=colors[i], label=operation_labels[i]) for i in range(num_operations)]
