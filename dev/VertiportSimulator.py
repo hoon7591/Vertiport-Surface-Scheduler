@@ -122,7 +122,7 @@ class Vehicle:
 class Resource:
     """Resource representation in simulation"""
     id: int
-    resource_type: str  # 'pad', 'buffer_in', 'gate', 'buffer_out'
+    resource_type: str  # 'pad', 'buffer_in', 'gate', 'buffer_out', 'buffer'
     state: ResourceState = ResourceState.IDLE
     current_vehicle: Optional[int] = None
     previous_vehicle_operation: Optional[Tuple[int, int]] = None  # (vehicle_id, operation_id) For separation time calculations
@@ -582,7 +582,7 @@ class VertiportSimulator:
             for _ in range(self.instance.num_buffer):
                 self.resources[resource_id] = Resource(
                     id=resource_id,
-                    resource_type='buffer_in'
+                    resource_type='buffer'
                 )
                 resource_id += 1
         else:
@@ -602,14 +602,7 @@ class VertiportSimulator:
             resource_id += 1
         
         # Buffer-out areas (if not unified)
-        if self.instance.is_unified_buffer:
-            for _ in range(self.instance.num_buffer):
-                self.resources[resource_id] = Resource(
-                    id=resource_id,
-                    resource_type='buffer_out'
-                )
-                resource_id += 1
-        else:
+        if not self.instance.is_unified_buffer:
             for _ in range(self.instance.num_buffer_out):
                 self.resources[resource_id] = Resource(
                     id=resource_id,
