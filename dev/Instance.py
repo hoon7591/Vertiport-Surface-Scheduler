@@ -67,7 +67,7 @@ class InstanceConfig:
     num_gate: int = 10
     num_buffer_out: Any = None # not used for is_unified_buffer = True: if True, this is merged with buffer_in #TODO : revise implicitly
     num_buffer: Any = None # only used for is_unified_buffer = True
-    objective_weights: List[float] = field(default_factory=lambda: [0.5, 0.5])
+    objective_weights: List[float] = field(default_factory=lambda: [1.0, 1.0])
     proc_air_v: List[float] = field(default_factory=lambda: [2.0, 2.2, 2.8, 3.0])
     proc_air_r: List[float] = field(default_factory=lambda: [0.8, 0.9, 1.0, 1.0])
     proc_air_o: List[float] = field(default_factory=lambda: [1.2, 1.0])

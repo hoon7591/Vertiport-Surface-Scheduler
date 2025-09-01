@@ -214,7 +214,7 @@ class ExactSolver(SolverStrategy):
 
         # Solve the model
         if is_numerical_exp:
-            model.setParam('TimeLimit', 600)
+            model.setParam('TimeLimit', 100)
             model.optimize()
             if model.Status == GRB.TIME_LIMIT:
                 is_runtime_over = True
@@ -256,7 +256,7 @@ class FCFSSolver(SolverStrategy):
 
         # Solve the model
         if is_numerical_exp:
-            model.setParam('TimeLimit', 600)
+            model.setParam('TimeLimit', 100)
             model.optimize()
             if model.Status == GRB.TIME_LIMIT:
                 is_runtime_over = True
@@ -314,7 +314,7 @@ class NoRuleSolver(SolverStrategy):
 
         # No objective function set for SAT mode
         if is_numerical_exp:
-            model.setParam('TimeLimit', 600)
+            model.setParam('TimeLimit', 100)
             model.optimize()
             if model.Status == GRB.TIME_LIMIT:
                 is_runtime_over = True
@@ -332,7 +332,7 @@ class NoRuleSolver(SolverStrategy):
 class FCFS_HeuristicSolver(SolverStrategy):
     def solve(self, instance: Instance, is_numerical_exp: bool) -> Solution:
         # Create simulator
-        simulator = VertiportSimulator(instance)
+        simulator = VertiportSimulator(instance, is_numerical_exp)
         is_deadlock = False
         is_runtime_over = False
 
@@ -361,7 +361,7 @@ class FCFS_HeuristicSolver(SolverStrategy):
                         if break_flag:
                             break
 
-            if event is None and len(available_resources) == 0 and simulator.is_simulation_complete() is False and is_numerical_exp:
+            if event is None and simulator.is_simulation_complete() is False and is_numerical_exp:
                 is_deadlock = True
                 break
 

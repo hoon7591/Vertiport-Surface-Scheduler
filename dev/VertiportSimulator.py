@@ -165,7 +165,7 @@ class VertiportSimulator:
     allocation methods and controlling simulation execution.
     """
     
-    def __init__(self, instance: Instance):
+    def __init__(self, instance: Instance, is_numerical_exp):
         self.instance = instance
         
         # Simulation state
@@ -208,9 +208,10 @@ class VertiportSimulator:
             )
             
             # Create file handler for detailed logs
-            file_handler = logging.FileHandler('vertiport_simulation.log', mode='w')
-            file_handler.setLevel(logging.DEBUG)
-            file_handler.setFormatter(formatter)
+            if not is_numerical_exp:
+                file_handler = logging.FileHandler('vertiport_simulation.log', mode='w')
+                file_handler.setLevel(logging.DEBUG)
+                file_handler.setFormatter(formatter)
             
             # Create file handler for errors only
             error_handler = logging.FileHandler('vertiport_errors.log', mode='w')
@@ -223,7 +224,8 @@ class VertiportSimulator:
             console_handler.setFormatter(formatter)
             
             # Add handlers to logger
-            self.logger.addHandler(file_handler)
+            if not is_numerical_exp:
+                self.logger.addHandler(file_handler)
             self.logger.addHandler(error_handler)
             self.logger.addHandler(console_handler)
             
