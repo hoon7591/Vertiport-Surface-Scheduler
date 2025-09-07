@@ -427,6 +427,22 @@ class VertiportSimulator:
                 available.append(resource)
         
         return available
+
+    def get_num_landing_processing(self) -> int:
+        """Get number of vehicles currently in landing processing"""
+        count = 0
+        for vehicle in self.vehicles.values():
+            if vehicle.state == VehicleState.LANDING or vehicle.state == VehicleState.WAITING_AFTER_LANDING:
+                count += 1
+        return count
+
+    def get_num_buffer_in_processing(self) -> int:
+        """Get number of vehicles currently in buffer-in processing"""
+        count = 0
+        for vehicle in self.vehicles.values():
+            if vehicle.state == VehicleState.IN_BUFFER_IN or vehicle.state == VehicleState.WAITING_FOR_GATE_AT_BUFFER:
+                count += 1
+        return count
     
     def can_assign_vehicle_to_resource(self, vehicle_id: int, resource_id: int, operation: int) -> bool:
         """Check if a vehicle can be assigned to a specific resource for an operation"""
@@ -463,6 +479,17 @@ class VertiportSimulator:
 
         if operation == expected_operation and self.current_time < vehicle.planned_gate_close_time:
             return False
+
+        # Avoid deadlock by preventing that the all pads are occupied by landing vehicles
+        if operation == 0:
+            if self.get_num_landing_processing() >= self.instance.num_pad - 1:
+                return False
+
+        # Avoid deadlock by preventing that the all buffers are occupied by buffer-in vehicles when unified buffer is used
+        if self.instance.is_unified_buffer:
+            if operation == 1:
+                if self.get_num_buffer_in_processing() >= self.instance.num_buffer - 1:
+                    return False
 
         processing_time = self.instance.proc[operation][vehicle_id][local_idx]
         return processing_time >= 0
@@ -1097,7 +1124,7 @@ class VertiportSimulator:
                            [num_pad + num_buffer_in + num_gate, num_pad + num_buffer_in + num_gate + num_buffer_out],
                            [0, num_pad]]
     
-    def _generate_solution(self, runtime, is_deadlock, is_runtime_over) -> Solution:
+    def _generate_solution(self, runtime, is_deadlock, is_runtime_over, solver_type) -> Solution:
         """Generate Solution object from simulation results"""
         num_vehicles = self.instance.num_vehicles
         num_operations = self.instance.num_operations
@@ -1147,7 +1174,7 @@ class VertiportSimulator:
             arrival_time_tardiness=arrival_time_tardiness,
             departure_time_tardiness=departure_time_tardiness,
             resource_ind=self._build_resource_ranges(),
-            solver_type="DiscreteEventSimulation",
+            solver_type=solver_type,
             instance=self.instance,
             is_deadlock=is_deadlock,
             is_runtime_over=is_runtime_over

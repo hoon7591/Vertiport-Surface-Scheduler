@@ -40,12 +40,18 @@ Notes:
 
 if __name__ == "__main__":
 
-    # generate single instance
-    # config = InstanceConfig(is_unified_buffer=True, num_vehicles=20, num_buffer=2)
+    # # generate single instance
+    # config = InstanceConfig(is_unified_buffer=True, num_vehicles=15, num_buffer=2, num_gate=6, num_pad=2)
     # config = InstanceConfig(is_unified_buffer=False, num_vehicles=15, num_buffer_in=2, num_gate=6, num_pad=2, num_buffer_out=2,
     #                         ETD_margin=3, gate_close_margin=2, ETA_ready_diff=[3, 2], seed=27)  # Example: override defaults
     # config = InstanceConfig(is_unified_buffer=True, num_vehicles=15, num_buffer=2, num_gate=6, num_pad=2,
     #                         ETD_margin=3, gate_close_margin=2, ETA_ready_diff=[3, 2], seed=20)
+    # config = InstanceConfig(is_unified_buffer=True, num_vehicles=15, num_buffer=2, num_gate=6, num_pad=2,
+    #                         ETD_margin=3, gate_close_margin=2, ETA_ready_diff=[3, 2], seed=65)
+    # config = InstanceConfig(is_unified_buffer=True, num_vehicles=15, num_buffer=2, num_gate=6, num_pad=2,
+    #                         ETD_margin=4, gate_close_margin=2.5, ETA_ready_diff=[3, 2], seed=8)
+    # config = InstanceConfig(is_unified_buffer=False, num_vehicles=50, num_buffer_in=2, num_buffer_out=2, num_gate=6, num_pad=2,
+    #                         ETD_margin=5, gate_close_margin=3, ETA_ready_diff=[3, 6], seed=174)
     # instance = generate_instance(config)
     #
     # # Solve by solver

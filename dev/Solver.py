@@ -368,7 +368,7 @@ class FCFS_HeuristicSolver(SolverStrategy):
         solve_end_time = time.time()
         runtime = solve_end_time - solve_start_time
 
-        return simulator._generate_solution(runtime, is_deadlock, is_runtime_over)
+        return simulator._generate_solution(runtime, is_deadlock, is_runtime_over, solver_type="FCFS_heuristic")
 
 
 # Solver factory with minimal overhead

@@ -11,13 +11,13 @@ from Solver import solve
 @dataclass
 class ExperimentConfig:
     num_vehicles_pad_buffer_gate_exp: Any = field(default_factory=lambda: [
-        [10, 15, 20, 2, 6],
-        [15, 20, 25, 3, 8],
-        [20, 25, 30, 4, 10],
+        [10, 15, 2, 6],
+        [15, 20, 3, 8],
+        [20, 25, 4, 10],
     ])
-    ETD_margin_exp: List[int] = field(default_factory=lambda: [3, 4, 5])
-    ETD_margin_minus_NED_exp: List[int] = field(default_factory=lambda: [1, 1.5, 2])
-    ETA_ready_diff_sigma_exp: List[int] = field(default_factory=lambda: [2, 6, 10])
+    ETD_margin_exp: List[int] = field(default_factory=lambda: [3, 5])
+    ETD_margin_minus_NED_exp: List[int] = field(default_factory=lambda: [1, 2])
+    ETA_ready_diff_sigma_exp: List[int] = field(default_factory=lambda: [1, 3, 5])
     is_unified_buffer_exp: List[bool] = field(default_factory=lambda: [True, False])
 
 
@@ -71,7 +71,7 @@ def Numerical_Experiment(exp_config: ExperimentConfig = ExperimentConfig()):
         pads = cfg_list[-2]
         gates = cfg_list[-1]
         buffers = pads  # matches your original choice
-        vehicles_list = cfg_list[:3]
+        vehicles_list = cfg_list[:2]
 
         for i in range(len(vehicles_list)):
             num_vehicles = vehicles_list[i]
