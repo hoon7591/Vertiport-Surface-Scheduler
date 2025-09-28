@@ -26,7 +26,6 @@ Hyper Parameter Lists for Problem Generation in InstanceConfig
 # st_list_o: coefficient depending on operations pair for separation time setting (1D list, len = 4)
 #            (o, o') => [coe of (1, 1), coe of (1, 5), coe of (5, 1), coe of (5, 5)]
 # st_list_r: coefficient depending on resource for separation time setting (1D list, len = num_pad)
-#            len(st_list_r) == num_pad
 # st_list: concatenated separation list (4D list, automatically generated from st_list_v, st_list_o, and st_list_r)
 #          st_list[operation_pair, type of v, type of v', resource]
 # ready_max: maximum of ready time
@@ -69,7 +68,7 @@ class InstanceConfig:
     num_buffer: Any = None # only used for is_unified_buffer = True
     objective_weights: List[float] = field(default_factory=lambda: [1.0, 1.0])
     proc_air_v: List[float] = field(default_factory=lambda: [2.0, 2.2, 2.8, 3.0])
-    proc_air_r: List[float] = field(default_factory=lambda: [0.8, 0.9, 1.0, 1.0])
+    proc_air_r: List[float] = field(default_factory=lambda: [0.8, 0.9, 1.0, 1.0, 0.8, 0.9, 1.0, 1.0])
     proc_air_o: List[float] = field(default_factory=lambda: [1.2, 1.0])
     proc_gate_v: List[int] = field(default_factory=lambda: [15, 17, 23, 25])
     st_list_v: Any = field(default_factory=lambda: [
@@ -79,7 +78,7 @@ class InstanceConfig:
         [2.0, 1.75, 1.5, 1.25]
     ])
     st_list_o: List[float] = field(default_factory=lambda: [0.8, 0.6, 0.5, 1.0])
-    st_list_r: List[float] = field(default_factory=lambda: [1.0, 0.7, 0.8, 1.0])
+    st_list_r: List[float] = field(default_factory=lambda: [1.0, 0.7, 0.8, 1.0, 1.0, 0.7, 0.8, 1.0])
     ready_max: float = 100.0
     ETA_ready_diff: List[float] = field(default_factory=lambda: [3, 3])
     ETD_margin: float = 5.0

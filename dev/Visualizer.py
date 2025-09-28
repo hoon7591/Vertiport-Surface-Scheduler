@@ -30,7 +30,7 @@ def _get_operation_display_info(is_unified_buffer, num_buffer_in, num_buffer_out
     return operation_labels, colors
 
 
-def visualize_result(solution):
+def visualize_result(solution, vehicle_ids, *arg):
     # Use solution's enhanced data instead of extracting from instance
     num_operations = solution.num_operations
     num_resources = solution.num_resources
@@ -66,52 +66,68 @@ def visualize_result(solution):
     yticks = list(range(num_resources))
     ytick_labels = [f"R{r}" for r in range(num_resources)]
 
-    for v in range(num_vehicles):
+    tardiness_correction = 0.0
+
+    for v in range(len(vehicle_ids)):
         for o in range(num_operations):
-            start = start_times[v][o]
-            
-            # Use solution's method to get finish time
-            finish = solution.get_operation_finish_time(v, o)
-            duration = solution.operation_durations[v, o]
-            
-            if duration <= 0:
+            if len(arg) > 0 and vehicle_ids[v] in arg[0] and o < arg[1][arg[0].index(vehicle_ids[v])]:
                 continue
+            else:
+                start = start_times[v][o]
 
-            res = int(assigned_resources[v][o])
-            y = res
+                # Use solution's method to get finish time
+                finish = solution.get_operation_finish_time(v, o)
+                duration = solution.operation_durations[v, o]
+                if o != num_operations - 1:
+                    waiting_duration = solution.waiting_times[v, o]
 
-            # Draw main operation bar
-            ax.barh(y, duration, left=start, height=0.4, color=colors[o], edgecolor='black', zorder=1)
+                if duration <= 0 and waiting_duration <= 0:
+                    continue
 
-            # Draw waiting bar using solution's waiting times
-            if o != num_operations - 1:
-                waiting_duration = solution.waiting_times[v, o]
-                if waiting_duration > 0:
-                    ax.barh(y, waiting_duration, left=finish, height=0.4, color='gray', edgecolor='black', zorder=1)
-                    ax.text(start_times[v][o + 1], y, f'{start_times[v][o + 1]:.1f}', ha='left', va='center', fontsize=7, color='black')
+                res = int(assigned_resources[v][o])
+                y = res
 
-            # Vehicle ID centered
-            ax.text(start + duration / 2, y, f'V{v}\nP:{duration:.1f}\ntype{vehicle_type[v]}', ha='center', va='center', fontsize=7, color='black')
+                # Draw main operation bar
+                if duration > 0:
+                    ax.barh(y, duration, left=start, height=0.4, color=colors[o], edgecolor='black', zorder=1)
 
-            # Start time on left edge
-            ax.text(start - 0.2, y, f"S:{start:.1f}", ha='left', va='center', fontsize=7, color='black')
+                # Draw waiting bar using solution's waiting times
+                if o != num_operations - 1:
+                    if waiting_duration > 0:
+                        ax.barh(y, waiting_duration, left=finish, height=0.4, color='gray', edgecolor='black', zorder=1)
+                        ax.text(start_times[v][o + 1], y, f'{start_times[v][o + 1]:.1f}', ha='left', va='center', fontsize=10, color='black')
 
-            # Finish time on right edge
-            ax.text(finish + 0.2, y, f"F:{finish:.1f}", ha='right', va='center', fontsize=7, color='black')
+                # Vehicle ID centered
+                if duration > 0:
+                    ax.text(start + duration / 2, y, f'V{vehicle_ids[v]}\nP:{duration:.1f}\ntype{vehicle_type[v]}', ha='center', va='center', fontsize=10, color='black')
 
-        # Arrival Tardiness (after landing)
-        if arrival_tardiness[v] > 0:
-            landing_resource_idx = int(assigned_resources[v][0])
-            ax.barh(landing_resource_idx, arrival_tardiness[v], left=planned_arrival_times[v],
-                    height=0.4, edgecolor=tardiness_color, facecolor='none', hatch='//', linewidth=1.2, zorder=2)
+                    # Start time on left edge
+                    ax.text(start - 0.2, y, f"S:{start:.1f}", ha='left', va='center', fontsize=10, color='black')
 
-        # Departure Tardiness (after takeoff)
-        if departure_tardiness[v] > 0:
-            takeoff_resource_idx = int(assigned_resources[v][num_operations - 1])
-            ax.barh(takeoff_resource_idx, departure_tardiness[v], left=planned_departure_times[v],
-                    height=0.4, edgecolor=tardiness_color, facecolor='none', hatch='//', linewidth=1.2, zorder=2)
+                    # Finish time on right edge
+                    ax.text(finish + 0.2, y, f"F:{finish:.1f}", ha='right', va='center', fontsize=10, color='black')
 
-    for v in range(num_vehicles):
+        if len(arg) > 0 and vehicle_ids[v] in arg[0] and arg[1][arg[0].index(vehicle_ids[v])] == 4:
+            tardiness_correction += departure_tardiness[v]
+            continue
+        else:
+            # Departure Tardiness (after takeoff)
+            if departure_tardiness[v] > 0:
+                takeoff_resource_idx = int(assigned_resources[v][num_operations - 1])
+                ax.barh(takeoff_resource_idx, departure_tardiness[v], left=planned_departure_times[v],
+                        height=0.4, edgecolor=tardiness_color, facecolor='none', hatch='//', linewidth=1.2, zorder=2)
+
+        if len(arg) > 0 and vehicle_ids[v] in arg[0] and arg[1][arg[0].index(vehicle_ids[v])] > 0:
+            tardiness_correction += arrival_tardiness[v]
+            continue
+        else:
+            # Arrival Tardiness (after landing)
+            if arrival_tardiness[v] > 0:
+                landing_resource_idx = int(assigned_resources[v][0])
+                ax.barh(landing_resource_idx, arrival_tardiness[v], left=planned_arrival_times[v],
+                        height=0.4, edgecolor=tardiness_color, facecolor='none', hatch='//', linewidth=1.2, zorder=2)
+
+    for v in range(len(vehicle_ids)):
         landing_resource_idx = int(assigned_resources[v][0])
         if is_unified_buffer:
             if num_buffer > 0:
@@ -128,32 +144,46 @@ def visualize_result(solution):
         y_gate = gate_resource_idx
         y_takeoff = takeoff_resource_idx
 
-        # ETA marker on Landing row
-        ax.vlines(planned_arrival_times[v], ymin=y_landing - 0.2, ymax=y_landing + 0.2,
-                  color='blue', linestyle='--', alpha=0.6)
-        ax.text(planned_arrival_times[v], y_landing + 0.3, f"ETA\nV{v}\nAT:{arrival_tardiness[v]:.1f}", fontsize=7, color='blue', ha='center')
+        if len(arg) > 0 and vehicle_ids[v] in arg[0] and arg[1][arg[0].index(vehicle_ids[v])] == 4:
+            continue
+        else:
+            # ETD marker on Takeoff row
+            ax.vlines(planned_departure_times[v], ymin=y_takeoff - 0.2, ymax=y_takeoff + 0.2,
+                      color='red', linestyle='--', alpha=0.6)
+            ax.text(planned_departure_times[v], y_takeoff - 0.75,
+                    f"ETD\nV{vehicle_ids[v]}\nDT:{departure_tardiness[v]:.1f}", fontsize=10, color='red', ha='center')
 
-        # Gate closing time marker on Gate row (no early departure)
-        ax.vlines(planned_gate_closing_times[v], ymin=y_gate - 0.2, ymax=y_gate + 0.2,
-                  color='green', linestyle='--', alpha=0.6)
-        ax.text(planned_gate_closing_times[v], y_gate - 0.3, f"NED\nV{v}", fontsize=7, color='green', ha='center')
+        if len(arg) > 0 and vehicle_ids[v] in arg[0] and arg[1][arg[0].index(vehicle_ids[v])] > 2:
+            continue
+        else:
+            # Gate closing time marker on Gate row (no early departure)
+            ax.vlines(planned_gate_closing_times[v], ymin=y_gate - 0.2, ymax=y_gate + 0.2,
+                      color='green', linestyle='--', alpha=0.6)
+            ax.text(planned_gate_closing_times[v], y_gate - 0.5, f"NED\nV{vehicle_ids[v]}", fontsize=10, color='green',
+                    ha='center')
 
-        # ETD marker on Takeoff row
-        ax.vlines(planned_departure_times[v], ymin=y_takeoff - 0.2, ymax=y_takeoff + 0.2,
-                  color='red', linestyle='--', alpha=0.6)
-        ax.text(planned_departure_times[v], y_takeoff - 0.42, f"ETD\nV{v}\nDT:{departure_tardiness[v]:.1f}", fontsize=7, color='red', ha='center')
+        if len(arg) > 0 and vehicle_ids[v] in arg[0] and arg[1][arg[0].index(vehicle_ids[v])] > 0:
+            continue
+        else:
+            # ETA marker on Landing row
+            ax.vlines(planned_arrival_times[v], ymin=y_landing - 0.2, ymax=y_landing + 0.2,
+                      color='blue', linestyle='--', alpha=0.6)
+            ax.text(planned_arrival_times[v], y_landing + 0.25, f"ETA\nV{vehicle_ids[v]}\nAT:{arrival_tardiness[v]:.1f}", fontsize=10, color='blue', ha='center')
 
-        # Ready marker on Landing row
-        ax.vlines(ready[v], ymin=y_landing - 0.2, ymax=y_landing + 0.2,
-                  color='darkmagenta', linestyle=':', alpha=0.6)
-        ax.text(ready[v], y_landing - 0.3, f"Ready\nV{v}", fontsize=7, color='darkmagenta', ha='center')
+        if len(arg) > 0 and vehicle_ids[v] in arg[0]:
+            continue
+        else:
+            # Ready marker on Landing row
+            ax.vlines(ready[v], ymin=y_landing - 0.2, ymax=y_landing + 0.2,
+                      color='darkmagenta', linestyle=':', alpha=0.6)
+            ax.text(ready[v], y_landing - 0.5, f"Ready\nV{vehicle_ids[v]}", fontsize=10, color='darkmagenta', ha='center')
 
     # Axis settings
     ax.set_yticks(yticks)
     ax.set_yticklabels(ytick_labels)
     ax.set_xlabel('Time (min)')
     ax.set_ylim(-1, num_resources + 1)
-    ax.set_title(f"Resource-Centric Gantt | Obj: {obj_val:.2f}, "
+    ax.set_title(f"Resource-Centric Gantt | Obj: {obj_val - tardiness_correction:.2f}, "
                  f"Total AT: {solution.total_arrival_tardiness:.2f}, Total DT: {solution.total_departure_tardiness:.2f}, "
                  f"Runtime: {solver_runtime:.2f}s, Sim End Time: {sim_end_time:.2f}min, Solver: {solver_type}")
 

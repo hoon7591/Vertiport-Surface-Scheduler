@@ -259,10 +259,10 @@ class VertiportSimulator:
 
             # Scheduled NED reached event
             departure_event = Event(
-                time = vehicle.planned_gate_close_time,
-                event_type = EventType.NED_REACHED,
-                vehicle_id = v_id,
-                event_id = self._get_next_event_id()
+                time=vehicle.planned_gate_close_time,
+                event_type=EventType.NED_REACHED,
+                vehicle_id=v_id,
+                event_id=self._get_next_event_id()
             )
             heapq.heappush(self.event_queue, departure_event)
 
@@ -375,34 +375,34 @@ class VertiportSimulator:
         """
         Preview the impact of assigning a vehicle to a resource, including separation time effects.
         This helps external schedulers make informed decisions.
-        
+
         Returns:
         - start_time: When the operation would start
-        - finish_time: When the operation would finish  
+        - finish_time: When the operation would finish
         - separation_time: Required separation time after completion
         - resource_available_time: When resource becomes available for next use
         """
         if (vehicle_id not in self.vehicles or resource_id not in self.resources):
             return {}
-        
+
         vehicle = self.vehicles[vehicle_id]
         resource = self.resources[resource_id]
-        
+
         # Calculate when operation can start
         start_time = max(self.current_time, resource.idle_duration)
-        
+
         # Get processing time
         processing_time = self.get_vehicle_processing_time(vehicle_id, resource_id, operation)
         finish_time = start_time + processing_time
-        
+
         # Calculate conservative separation time
         separation_time = self._calculate_conservative_separation_time(
             resource, operation, vehicle, resource_id
         )
-        
+
         # When resource becomes available for next use
         resource_available_time = finish_time + separation_time
-        
+
         return {
             'start_time': start_time,
             'finish_time': finish_time,
@@ -1180,3 +1180,59 @@ class VertiportSimulator:
             is_runtime_over=is_runtime_over
         )
 
+
+class VertiportSimulatorRecedingHorizon(VertiportSimulator):
+    def get_available_resources(self, operation: int) -> List[Resource]:
+        """Get list of resources available for specified operation"""
+        resource_ranges = self._build_resource_ranges()
+        if operation >= len(resource_ranges):
+            return []
+
+        start_idx, end_idx = resource_ranges[operation]
+        available = []
+
+        for res_id in range(start_idx, end_idx):
+            resource = self.resources[res_id]
+            if resource.state == ResourceState.IDLE or resource.state == ResourceState.SEPARATION_DELAY or resource.state == ResourceState.OCCUPIED:
+                available.append(resource)
+
+        return available
+
+    def can_assign_vehicle_to_resource(self, vehicle_id: int, resource_id: int, operation: int) -> bool:
+        """Check if a vehicle can be assigned to a specific resource for an operation"""
+        if vehicle_id not in self.vehicles or resource_id not in self.resources:
+            return False
+
+        vehicle = self.vehicles[vehicle_id]
+        resource = self.resources[resource_id]
+
+        # Check if vehicle is waiting for this operation
+        if vehicle.current_operation != operation:
+            return False
+
+        # Check if resource is available
+        if resource.state != ResourceState.IDLE:
+            return False
+
+        # Check if processing time is available
+        resource_ranges = self._build_resource_ranges()
+        if operation >= len(resource_ranges):
+            return False
+
+        local_idx = resource_id - resource_ranges[operation][0]
+        if (local_idx < 0 or local_idx >= len(self.instance.proc[operation][vehicle_id])):
+            return False
+
+        # Check if early departure
+        if self.instance.is_unified_buffer:
+            expected_operation = (len(resource_ranges) - 2) if self.instance.num_buffer > 0 \
+                else (len(resource_ranges) - 1)
+        else:
+            expected_operation = (len(resource_ranges) - 2) if self.instance.num_buffer_out > 0 \
+                else (len(resource_ranges) - 1)
+
+        if operation == expected_operation and self.current_time < vehicle.planned_gate_close_time:
+            return False
+
+        processing_time = self.instance.proc[operation][vehicle_id][local_idx]
+        return processing_time >= 0
