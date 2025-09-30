@@ -538,20 +538,17 @@ class FCFS_HeuristicSolver(SolverStrategy):
                             vehicle = waiting_vehicles[i]  # selection logic
                             resource = available_resources[j]  # selection logic
 
+                            # Error fixing of separation time reflection; only the worst case separation is considered before
+                            if resource.state == ResourceState.SEPARATION_DELAY and event.event_type == EventType.RESOURCE_AVAILABLE:
+                                for k in range(len(event.data['vehicle_operation_pairs'])):
+                                    if vehicle.id == event.data['vehicle_operation_pairs'][k]['vehicle_id'] and operation == event.data['vehicle_operation_pairs'][k]['operation']:
+                                        resource.state = ResourceState.IDLE
+                                        break
+
                             if simulator.can_assign_vehicle_to_resource(vehicle.id, resource.id, operation):
                                 simulator.assign_vehicle_to_resource_now(vehicle.id, resource.id, operation)
                                 break_flag = True
                                 break
-                            # Error fixing of separation time reflection; only the worst case separation is considered before
-                            elif (event.event_type == EventType.RESOURCE_AVAILABLE or event.event_type == EventType.VEHICLE_ARRIVAL or event.event_type == EventType.OPERATION_COMPLETE) and resource.state == ResourceState.SEPARATION_DELAY:
-                                separation_clear_event = Event(time=simulator.current_time,
-                                                               event_type=EventType.RESOURCE_AVAILABLE,
-                                                               vehicle_id=vehicle.id,
-                                                               resource_id=resource.id,
-                                                               operation_id=operation,
-                                                               event_id=event.event_id)
-                                heapq.heappush(simulator.event_queue, separation_clear_event)
-                                resource.state = ResourceState.IDLE
 
             if event is None and simulator.is_simulation_complete() is False and is_numerical_exp:
                 is_deadlock = True

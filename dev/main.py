@@ -99,19 +99,19 @@ if __name__ == "__main__":
     # solution = solve(instance_from_scenario_exp, solver="exact_RHC", is_numerical_exp=False, processing_vehicles_op=[0, 2, 2, 2, 2, 2, 2], processing_vehicles_res=[0, 5, 7, 8, 11, 12, 13], horizon_start=80.0)
     # visualize_result(solution, activated_vehicle_id_exp, [77, 29, 32, 58, 6, 148, 83], [0, 2, 2, 2, 2, 2, 2])
 
-    # instance_from_scenario_true, activated_vehicle_id_true = Scenario.scenario_to_instance_true(scenario_true, 100.0)
-    # solution = solve(instance_from_scenario_true, solver="FCFS_heuristic", is_numerical_exp=True)
-    # visualize_result(solution, activated_vehicle_id_true)
-
-    instance_from_scenario_exp, activated_vehicle_id_exp, ready_in_horizon_vehicle_id_exp = Scenario.scenario_to_instance_exp(scenario_exp, [0.0, 80.0], [], [], [])
-    solution = solve(instance_from_scenario_exp, solver="exact", is_numerical_exp=False)
-    visualize_result(solution, activated_vehicle_id_exp)
-
-    instance_from_scenario_true, activated_vehicle_id_true = Scenario.scenario_to_instance_true(scenario_true, 80.0)
-    solution = solve(instance_from_scenario_true, solver="run_RHC", is_numerical_exp=True,
-                     planned_resource_assignment=solution.assigned_resources,
-                     planned_operation_start_times=solution.start_times,
-                     vehicle_original_id=list(range(len(activated_vehicle_id_exp))))
+    instance_from_scenario_true, activated_vehicle_id_true = Scenario.scenario_to_instance_true(scenario_true, 100.0)
+    solution = solve(instance_from_scenario_true, solver="FCFS_heuristic", is_numerical_exp=True)
     visualize_result(solution, activated_vehicle_id_true)
+
+    # instance_from_scenario_exp, activated_vehicle_id_exp, ready_in_horizon_vehicle_id_exp = Scenario.scenario_to_instance_exp(scenario_exp, [0.0, 80.0], [], [], [])
+    # solution = solve(instance_from_scenario_exp, solver="exact", is_numerical_exp=False)
+    # visualize_result(solution, activated_vehicle_id_exp)
+    #
+    # instance_from_scenario_true, activated_vehicle_id_true = Scenario.scenario_to_instance_true(scenario_true, 80.0)
+    # solution = solve(instance_from_scenario_true, solver="run_RHC", is_numerical_exp=True,
+    #                  planned_resource_assignment=solution.assigned_resources,
+    #                  planned_operation_start_times=solution.start_times,
+    #                  vehicle_original_id=list(range(len(activated_vehicle_id_exp))))
+    # visualize_result(solution, activated_vehicle_id_true)
 
     print("Test End")
