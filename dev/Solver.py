@@ -539,16 +539,20 @@ class FCFS_HeuristicSolver(SolverStrategy):
                             resource = available_resources[j]  # selection logic
 
                             # Error fixing of separation time reflection; only the worst case separation is considered before
-                            if resource.state == ResourceState.SEPARATION_DELAY and event.event_type == EventType.RESOURCE_AVAILABLE:
+                            a = 0
+                            if resource.state == ResourceState.SEPARATION_DELAY and event.event_type == EventType.RESOURCE_AVAILABLE and resource.id == event.resource_id:
                                 for k in range(len(event.data['vehicle_operation_pairs'])):
                                     if vehicle.id == event.data['vehicle_operation_pairs'][k]['vehicle_id'] and operation == event.data['vehicle_operation_pairs'][k]['operation']:
                                         resource.state = ResourceState.IDLE
+                                        a = 1
                                         break
 
                             if simulator.can_assign_vehicle_to_resource(vehicle.id, resource.id, operation):
                                 simulator.assign_vehicle_to_resource_now(vehicle.id, resource.id, operation)
                                 break_flag = True
                                 break
+                            elif a:
+                                resource.state = ResourceState.SEPARATION_DELAY
 
             if event is None and simulator.is_simulation_complete() is False and is_numerical_exp:
                 is_deadlock = True
