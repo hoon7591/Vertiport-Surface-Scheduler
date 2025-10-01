@@ -278,25 +278,25 @@ class Scenario:
 
         for i in range(scenario_exp.num_vehicles):
             for j in range(scenario_exp.num_pad):
-                proc_landing[i][j] = scenario_exp.proc[0][i][j] + np.random.normal(0, config.disturbance_std_proc[0])
-                proc_takeoff[i][j] = scenario_exp.proc[-1][i][j] + np.random.normal(0, config.disturbance_std_proc[2])
+                proc_landing[i][j] = scenario_exp.proc[0][i][j] + np.clip(np.random.normal(0, config.disturbance_std_proc[0]), -scenario_exp.proc[0][i][j] * 0.2, None)
+                proc_takeoff[i][j] = scenario_exp.proc[-1][i][j] + np.clip(np.random.normal(0, config.disturbance_std_proc[2]), -scenario_exp.proc[-1][i][j] * 0.2, None)
 
         if scenario_exp.is_unified_buffer:
             if scenario_exp.num_buffer == 0:
                 for i in range(scenario_exp.num_vehicles):
                     for j in range(scenario_exp.num_gate):
-                        proc_gate[i][j] = scenario_exp.proc[1][i][j] + np.random.normal(0, config.disturbance_std_proc[1])
+                        proc_gate[i][j] = scenario_exp.proc[1][i][j] + np.clip(np.random.normal(0, config.disturbance_std_proc[1]), -scenario_exp.proc[1][i][j] * 0.2, None)
                 proc = [proc_landing, proc_gate, proc_takeoff]
             else:
                 for i in range(scenario_exp.num_vehicles):
                     for j in range(scenario_exp.num_gate):
-                        proc_gate[i][j] = scenario_exp.proc[2][i][j] + np.random.normal(0, config.disturbance_std_proc[1])
+                        proc_gate[i][j] = scenario_exp.proc[2][i][j] + np.clip(np.random.normal(0, config.disturbance_std_proc[1]), -scenario_exp.proc[2][i][j] * 0.2, None)
                 proc = [proc_landing, proc_buffer, proc_gate, proc_buffer, proc_takeoff]
         else:
             if scenario_exp.num_buffer_in == 0:
                 for i in range(scenario_exp.num_vehicles):
                     for j in range(scenario_exp.num_gate):
-                        proc_gate[i][j] = scenario_exp.proc[1][i][j] + np.random.normal(0, config.disturbance_std_proc[1])
+                        proc_gate[i][j] = scenario_exp.proc[1][i][j] + np.clip(np.random.normal(0, config.disturbance_std_proc[1]), -scenario_exp.proc[1][i][j] * 0.2, None)
                 if scenario_exp.num_buffer_out == 0:
                     proc = [proc_landing, proc_gate, proc_takeoff]
                 else:
@@ -304,7 +304,7 @@ class Scenario:
             else:
                 for i in range(scenario_exp.num_vehicles):
                     for j in range(scenario_exp.num_gate):
-                        proc_gate[i][j] = scenario_exp.proc[2][i][j] + np.random.normal(0, config.disturbance_std_proc[1])
+                        proc_gate[i][j] = scenario_exp.proc[2][i][j] + np.clip(np.random.normal(0, config.disturbance_std_proc[1]), -scenario_exp.proc[2][i][j] * 0.2, None)
                 if scenario_exp.num_buffer_out == 0:
                     proc = [proc_landing, proc_buffer_in, proc_gate, proc_takeoff]
                 else:

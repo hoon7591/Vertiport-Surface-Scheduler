@@ -1158,8 +1158,7 @@ class VertiportSimulator:
             departure_time_tardiness[i] = max(0, actual_departure_start - planned_departure_time)
 
         # Calculate objective value
-        obj_val = (weights[0] * arrival_time_tardiness.sum() + 
-                  weights[1] * departure_time_tardiness.sum())
+        obj_val = (weights[0] * arrival_time_tardiness.sum() + weights[1] * departure_time_tardiness.sum())
         
         # Calculate total simulation time
         sim_end_time = self.current_time
