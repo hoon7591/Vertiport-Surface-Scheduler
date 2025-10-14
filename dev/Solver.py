@@ -157,7 +157,7 @@ class SolverStrategy(ABC):
 
             model.addConstr(T_d[i] >= S[num_ops - 1, i] - vehicle_planned_departure_times[i])
 
-    def _extract_solution(self, model: Model, instance: Instance, variables: Dict, solver_name: str, is_deadlock, is_runtime_over) -> Solution:
+    def _extract_solution(self, model: Model, instance: Instance, variables: Dict, solver_name: str, is_deadlock, is_runtime_over, **kwargs) -> Solution:
         """Extract solution from the solved model."""
         num_ops = instance.num_operations
         num_vehicle = instance.num_vehicles
@@ -197,15 +197,18 @@ class SolverStrategy(ABC):
         if solver_name in ["FCFS_SAT", "FCFS_landing_SAT", "no_rule_SAT"]:
             obj_val = weights[0] * sum(arrival_time_tardiness) + weights[1] * sum(departure_time_tardiness)
 
+        # extract option parameter for objective selection
+        objective_option = kwargs.get('objective_option', "weighted_sum")
+
         return Solution(obj_val, runtime, sim_end_time, start_times, finish_times, assigned_resources,
-                        arrival_time_tardiness, departure_time_tardiness, resource_ind, solver_name, instance,
-                        is_deadlock, is_runtime_over)
+                        arrival_time_tardiness, departure_time_tardiness, resource_ind, solver_name,
+                        instance.objective_weights, instance, is_deadlock, is_runtime_over, objective_option)
 
 
 class SolverStrategyRHC(SolverStrategy):
     @abstractmethod
     def solve(self, instance: Instance, is_numerical_exp: bool, processing_vehicles_op: List[int],
-              processing_vehicles_res: List[int], horizon_start: float) -> Solution:
+              processing_vehicles_res: List[int], horizon_start: float, **kwargs) -> Solution:
         """Solve the given instance in receding horizon control context and return a solution."""
 
         raise NotImplementedError("Subclasses must implement the solve method")
@@ -346,7 +349,7 @@ class RunStrategyRHC(SolverStrategy):
 class ExactSolver(SolverStrategy):
     """Exact solver that guarantees optimal solution."""
 
-    def solve(self, instance: Instance, is_numerical_exp: bool) -> Solution:
+    def solve(self, instance: Instance, is_numerical_exp: bool, **kwargs) -> Solution:
         model, variables = self._setup_base_model(instance)
 
         # Set objective for exact solver
@@ -355,11 +358,36 @@ class ExactSolver(SolverStrategy):
         T_a = variables['T_a']
         T_d = variables['T_d']
 
-        model.setObjective(quicksum(weights[0] * T_a[i] + weights[1] * T_d[i] for i in range(num_vehicle)), GRB.MINIMIZE)
+        # extract option parameter for objective selection
+        obj_option = kwargs.get('obj_option', "weighted_sum")
+
+        # weighted sum of arrival delay and departure delay
+        if obj_option == "weighted_sum":
+            model.setObjective(quicksum(weights[0] * T_a[i] + weights[1] * T_d[i] for i in range(num_vehicle)), GRB.MINIMIZE)
+
+        # vehicle-wise max value of weighted sum of arrival delay and departure delay
+        elif obj_option == "vehicle_wise_max":
+            max_T_v_wise = model.addVar(vtype=GRB.CONTINUOUS, lb=0, name="max_T_v_wise")
+            for i in range(num_vehicle):
+                model.addConstr(max_T_v_wise >= weights[0] * T_a[i] + weights[1] * T_d[i])
+            model.setObjectiveN(max_T_v_wise, index=0, priority=2)
+            model.setObjectiveN(quicksum(weights[0] * T_a[i] + weights[1] * T_d[i] for i in range(num_vehicle)),
+                                index=1, priority=1)
+
+        # weighted sum of max value of arrival delay and departure delay
+        elif obj_option == "weighted_sum_of_max":
+            max_T_a = model.addVar(vtype=GRB.CONTINUOUS, lb=0, name="max_T_a")
+            max_T_d = model.addVar(vtype=GRB.CONTINUOUS, lb=0, name="max_T_d")
+            for i in range(num_vehicle):
+                model.addConstr(max_T_a >= T_a[i])
+                model.addConstr(max_T_d >= T_d[i])
+            model.setObjectiveN(weights[0] * max_T_a + weights[1] * max_T_d, index=0, priority=2)
+            model.setObjectiveN(quicksum(weights[0] * T_a[i] + weights[1] * T_d[i] for i in range(num_vehicle)),
+                                index=1, priority=1)
 
         # Solve the model
         if is_numerical_exp:
-            model.setParam('TimeLimit', 100)
+            model.setParam('TimeLimit', 100)    # 150
             model.optimize()
             if model.Status == GRB.TIME_LIMIT:
                 is_runtime_over = True
@@ -371,12 +399,12 @@ class ExactSolver(SolverStrategy):
 
         is_deadlock = False
 
-        return self._extract_solution(model, instance, variables, "exact", is_deadlock, is_runtime_over)
+        return self._extract_solution(model, instance, variables, "exact", is_deadlock, is_runtime_over, objective_option=obj_option)
 
 
 class ExactSolverRHC(SolverStrategyRHC):
     def solve(self, instance: Instance, is_numerical_exp: bool, processing_vehicles_op: List[int],
-              processing_vehicles_res: List[int], horizon_start: float) -> Solution:
+              processing_vehicles_res: List[int], horizon_start: float, **kwargs) -> Solution:
         model, variables = self._setup_base_model(instance, processing_vehicles_op, processing_vehicles_res)
 
         # Set objective for exact solver
@@ -385,7 +413,32 @@ class ExactSolverRHC(SolverStrategyRHC):
         T_a = variables['T_a']
         T_d = variables['T_d']
 
-        model.setObjective(quicksum(weights[0] * T_a[i] + weights[1] * T_d[i] for i in range(num_vehicle)), GRB.MINIMIZE)
+        # extract option parameter for objective selection
+        obj_option = kwargs.get('obj_option', "weighted_sum")
+
+        # weighted sum of arrival delay and departure delay
+        if obj_option == "weighted_sum":
+            model.setObjective(quicksum(weights[0] * T_a[i] + weights[1] * T_d[i] for i in range(num_vehicle)), GRB.MINIMIZE)
+
+        # vehicle-wise max value of weighted sum of arrival delay and departure delay
+        elif obj_option == "vehicle_wise_max":
+            max_T_v_wise = model.addVar(vtype=GRB.CONTINUOUS, lb=0, name="max_T_v_wise")
+            for i in range(num_vehicle):
+                model.addConstr(max_T_v_wise >= weights[0] * T_a[i] + weights[1] * T_d[i])
+            model.setObjectiveN(max_T_v_wise, index=0, priority=2)
+            model.setObjectiveN(quicksum(weights[0] * T_a[i] + weights[1] * T_d[i] for i in range(num_vehicle)),
+                                index=1, priority=1)
+
+        # weighted sum of max value of arrival delay and departure delay
+        elif obj_option == "weighted_sum_of_max":
+            max_T_a = model.addVar(vtype=GRB.CONTINUOUS, lb=0, name="max_T_a")
+            max_T_d = model.addVar(vtype=GRB.CONTINUOUS, lb=0, name="max_T_d")
+            for i in range(num_vehicle):
+                model.addConstr(max_T_a >= T_a[i])
+                model.addConstr(max_T_d >= T_d[i])
+            model.setObjectiveN(weights[0] * max_T_a + weights[1] * max_T_d, index=0, priority=2)
+            model.setObjectiveN(quicksum(weights[0] * T_a[i] + weights[1] * T_d[i] for i in range(num_vehicle)),
+                                index=1, priority=1)
 
         # Add constraints for processing vehicles
         y = variables['y']
@@ -409,7 +462,7 @@ class ExactSolverRHC(SolverStrategyRHC):
 
         is_deadlock = False
 
-        return self._extract_solution(model, instance, variables, "exact_RHC", is_deadlock, is_runtime_over)
+        return self._extract_solution(model, instance, variables, "exact_RHC", is_deadlock, is_runtime_over, objective_option=obj_option)
 
 
 class FCFSSolver(SolverStrategy):
@@ -419,7 +472,7 @@ class FCFSSolver(SolverStrategy):
         self.use_gurobi = is_objective_enabled
         self.landing_only = FCFS_for_landing_only
 
-    def solve(self, instance: Instance, is_numerical_exp: bool) -> Solution:
+    def solve(self, instance: Instance, is_numerical_exp: bool, **kwargs) -> Solution:
         model, variables = self._setup_base_model(instance)
 
         # Set objective only for Gurobi variant
@@ -428,7 +481,34 @@ class FCFSSolver(SolverStrategy):
             num_vehicle = instance.num_vehicles
             T_a = variables['T_a']
             T_d = variables['T_d']
-            model.setObjective(quicksum(weights[0] * T_a[i] + weights[1] * T_d[i] for i in range(num_vehicle)), GRB.MINIMIZE)
+
+            # extract option parameter for objective selection
+            obj_option = kwargs.get('obj_option', "weighted_sum")
+
+            # weighted sum of arrival delay and departure delay
+            if obj_option == "weighted_sum":
+                model.setObjective(quicksum(weights[0] * T_a[i] + weights[1] * T_d[i] for i in range(num_vehicle)),
+                                   GRB.MINIMIZE)
+
+            # vehicle-wise max value of weighted sum of arrival delay and departure delay
+            elif obj_option == "vehicle_wise_max":
+                max_T_v_wise = model.addVar(vtype=GRB.CONTINUOUS, lb=0, name="max_T_v_wise")
+                for i in range(num_vehicle):
+                    model.addConstr(max_T_v_wise >= weights[0] * T_a[i] + weights[1] * T_d[i])
+                model.setObjectiveN(max_T_v_wise, index=0, priority=2)
+                model.setObjectiveN(quicksum(weights[0] * T_a[i] + weights[1] * T_d[i] for i in range(num_vehicle)),
+                                    index=1, priority=1)
+
+            # weighted sum of max value of arrival delay and departure delay
+            elif obj_option == "weighted_sum_of_max":
+                max_T_a = model.addVar(vtype=GRB.CONTINUOUS, lb=0, name="max_T_a")
+                max_T_d = model.addVar(vtype=GRB.CONTINUOUS, lb=0, name="max_T_d")
+                for i in range(num_vehicle):
+                    model.addConstr(max_T_a >= T_a[i])
+                    model.addConstr(max_T_d >= T_d[i])
+                model.setObjectiveN(weights[0] * max_T_a + weights[1] * max_T_d, index=0, priority=2)
+                model.setObjectiveN(quicksum(weights[0] * T_a[i] + weights[1] * T_d[i] for i in range(num_vehicle)),
+                                    index=1, priority=1)
 
         # Add FCFS constraints
         if self.landing_only:
@@ -452,7 +532,7 @@ class FCFSSolver(SolverStrategy):
 
         is_deadlock = False
 
-        return self._extract_solution(model, instance, variables, solver_name, is_deadlock, is_runtime_over)
+        return self._extract_solution(model, instance, variables, solver_name, is_deadlock, is_runtime_over, objective_option=obj_option)
 
     def _add_fcfs_constraints(self, model, instance: Instance, variables):
         """Add FCFS-specific constraints for all operations."""
@@ -493,7 +573,7 @@ class FCFSSolver(SolverStrategy):
 class NoRuleSolver(SolverStrategy):
     """SAT solver without any primary sequencing rule."""
 
-    def solve(self, instance: Instance, is_numerical_exp: bool) -> Solution:
+    def solve(self, instance: Instance, is_numerical_exp: bool, **kwargs) -> Solution:
         model, variables = self._setup_base_model(instance)
 
         # No objective function set for SAT mode
@@ -514,7 +594,7 @@ class NoRuleSolver(SolverStrategy):
 
 
 class FCFS_HeuristicSolver(SolverStrategy):
-    def solve(self, instance: Instance, is_numerical_exp: bool) -> Solution:
+    def solve(self, instance: Instance, is_numerical_exp: bool, **kwargs) -> Solution:
         # Create simulator
         simulator = VertiportSimulator(instance, is_numerical_exp)
         is_deadlock = False
@@ -590,12 +670,26 @@ class RunRHC(RunStrategyRHC):
                         for j in range(len(available_resources)):
                             vehicle = waiting_vehicles[i]  # selection logic
                             resource = available_resources[j]  # selection logic
-                            if resource.id == planned_resource_assignment[vehicle_original_id[vehicle.id], operation]:
+                            if resource.id == planned_resource_assignment[vehicle_original_id[vehicle.id], operation]\
+                                    or (operation in [1, 3] and planned_operation_start_times[vehicle_original_id[vehicle.id], operation + 1]
+                                        == planned_operation_start_times[vehicle_original_id[vehicle.id], operation]):
                                 if simulator.current_time >= planned_operation_start_times[vehicle_original_id[vehicle.id], operation]:
+
+                                    # a = 0
+                                    # if resource.state == ResourceState.SEPARATION_DELAY and (event.event_type == EventType.RESOURCE_AVAILABLE or event.event_type == EventType.VEHICLE_ARRIVAL or event.event_type == EventType.OPERATION_COMPLETE) and resource.id == event.resource_id:
+                                    #     for k in range(len(event.data['vehicle_operation_pairs'])):
+                                    #         if vehicle.id == event.data['vehicle_operation_pairs'][k][
+                                    #             'vehicle_id'] and operation == event.data['vehicle_operation_pairs'][k]['operation']:
+                                    #             resource.state = ResourceState.IDLE
+                                    #             a = 1
+                                    #             break
+
                                     if simulator.can_assign_vehicle_to_resource(vehicle.id, resource.id, operation):
                                         simulator.assign_vehicle_to_resource_now(vehicle.id, resource.id, operation)
                                         break_flag = True
                                         break
+                                    # elif a:
+                                    #     resource.state = ResourceState.SEPARATION_DELAY
                                     elif (event.event_type == EventType.RESOURCE_AVAILABLE or event.event_type == EventType.VEHICLE_ARRIVAL or event.event_type == EventType.OPERATION_COMPLETE) and resource.state == ResourceState.SEPARATION_DELAY:
                                         separation_clear_event = Event(time=simulator.current_time,
                                                                        event_type=EventType.RESOURCE_AVAILABLE,

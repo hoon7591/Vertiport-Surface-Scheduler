@@ -21,7 +21,7 @@ weights: weights in objective function (1D list)
          => weights for obj definition is already declared in hyper_param_setting
 M: big-M in formulation
 
-solver: option for solver selction
+solver: option for solver selection
         - "exact": exact solver which guarantees optimal solution
         - "FCFS_Gurobi": First-Come-First-Served sequencing is applied to Gurobi solver
         - "FCFS_landing_Gurobi": Gurobi solver which applies First-Come-First-Served logic only for landing operations
@@ -31,6 +31,11 @@ solver: option for solver selction
         - "FCFS_heuristic": First-Come-First-Served heuristic solver (Discrete Event Simulation)
 
 is_numerical_exp: flag for numerical experiment mode or solving mode for single instance
+
+obj_option: option for objective function selection (activated only for the solvers which have objective function)
+        - "weighted_sum": weighted sum of arrival delay and departure delay
+        - "vehicle_wise_max": vehicle-wise max value of weighted sum of arrival delay and departure delay
+        - "weighted_sum_of_max": weighted sum of max value of arrival delay and departure delay
 
 Notes:
 1. Time unit is minute
@@ -43,7 +48,7 @@ Notes:
 if __name__ == "__main__":
 
     # # generate single instance
-    # config = InstanceConfig(is_unified_buffer=True, num_vehicles=50, num_buffer=2, num_gate=6, num_pad=2)
+    config = InstanceConfig(is_unified_buffer=True, num_vehicles=18, num_buffer=2, num_gate=6, num_pad=2)
     # config = InstanceConfig(is_unified_buffer=False, num_vehicles=15, num_buffer_in=2, num_gate=6, num_pad=2, num_buffer_out=2,
     #                         ETD_margin=3, gate_close_margin=2, ETA_ready_diff=[3, 2], seed=27)  # Example: override defaults
     # config = InstanceConfig(is_unified_buffer=True, num_vehicles=15, num_buffer=2, num_gate=6, num_pad=2,
@@ -56,11 +61,11 @@ if __name__ == "__main__":
     #                         ETD_margin=5, gate_close_margin=3, ETA_ready_diff=[3, 6], seed=174)
     # config = InstanceConfig(is_unified_buffer=True, num_vehicles=50, num_buffer=6, num_gate=18, num_pad=6)
     # config = InstanceConfig(is_unified_buffer=True, num_vehicles=9, num_buffer=3, num_gate=9, num_pad=3, ready_max=8)
-    # instance = generate_instance(config)
+    instance = generate_instance(config)
     #
-    # # Solve by solver
-    # solution = solve(instance, solver="FCFS_heuristic", is_numerical_exp=True)
-    # visualize_result(solution, list(range(instance.num_vehicles)))
+    # Solve by solver
+    solution = solve(instance, solver="exact", is_numerical_exp=True, obj_option="weighted_sum")
+    visualize_result(solution, list(range(instance.num_vehicles)))
 
     # # Numerical Study
     # exp_config = ExperimentConfig(num_vehicles_pad_buffer_gate_exp=[[10, 14, 2, 6], [15, 21, 3, 9], [20, 28, 4, 12]],
@@ -79,12 +84,12 @@ if __name__ == "__main__":
     ####### receding horizon controller #######
     ###########################################
 
-    # instance_from_scenario_exp, activated_vehicle_id_exp, ready_in_horizon_vehicle_id_exp = Scenario.scenario_to_instance_exp(scenario_exp, [0.0, 100.0], [], [], [])
-    # solution = solve(instance_from_scenario_exp, solver="exact", is_numerical_exp=False)
-    # visualize_result(solution, activated_vehicle_id_exp)
+    instance_from_scenario_exp, activated_vehicle_id_exp, ready_in_horizon_vehicle_id_exp = Scenario.scenario_to_instance_exp(scenario_exp, [0.0, 100.0], [], [], [])
+    solution = solve(instance_from_scenario_exp, solver="exact", is_numerical_exp=False)
+    visualize_result(solution, activated_vehicle_id_exp)
     #
     # instance_from_scenario_exp, activated_vehicle_id_exp, ready_in_horizon_vehicle_id_exp = Scenario.scenario_to_instance_exp(scenario_exp, [20.0, 40.0], [171, 208, 244, 205, 72, 128], [0, 2, 2, 2, 2, 2], [20.3, 22.5, 36.6, 33.2, 36.7, 26.8])
-    # solution = solve(instance_from_scenario_exp, solver="exact_RHC", is_numerical_exp=False, processing_vehicles_op=[0, 2, 2, 2, 2, 2], processing_vehicles_res=[1, 4, 7, 10, 11, 12], horizon_start=20.0)
+    # solution = solve(instance_from_scenario_exp, solver="exact_RHC", is_numerical_exp=False, processing_vehicles_op=[0, 2, 2, 2, 2, 2], processing_vehicles_res=[1, 4, 5, 6, 8, 9], horizon_start=20.0)
     # visualize_result(solution, activated_vehicle_id_exp, [171, 208, 244, 205, 72, 128], [0, 2, 2, 2, 2, 2])
     #
     # instance_from_scenario_exp, activated_vehicle_id_exp, ready_in_horizon_vehicle_id_exp = Scenario.scenario_to_instance_exp(scenario_exp, [40.0, 60.0], [42, 145, 237, 98, 10, 100, 72, 171], [0, 0, 2, 2, 2, 2, 2, 2], [40.0, 42.2, 55.5, 51.4, 42.3, 54.8, 40.0, 40.9])
@@ -99,19 +104,23 @@ if __name__ == "__main__":
     # solution = solve(instance_from_scenario_exp, solver="exact_RHC", is_numerical_exp=False, processing_vehicles_op=[0, 2, 2, 2, 2, 2, 2], processing_vehicles_res=[0, 5, 7, 8, 11, 12, 13], horizon_start=80.0)
     # visualize_result(solution, activated_vehicle_id_exp, [77, 29, 32, 58, 6, 148, 83], [0, 2, 2, 2, 2, 2, 2])
 
-    instance_from_scenario_true, activated_vehicle_id_true = Scenario.scenario_to_instance_true(scenario_true, 100.0)
-    solution = solve(instance_from_scenario_true, solver="FCFS_heuristic", is_numerical_exp=True)
-    visualize_result(solution, activated_vehicle_id_true)
+    # instance_from_scenario_true, activated_vehicle_id_true = Scenario.scenario_to_instance_true(scenario_true, 100.0)
+    # solution = solve(instance_from_scenario_true, solver="FCFS_heuristic", is_numerical_exp=True)
+    # visualize_result(solution, activated_vehicle_id_true)
 
-    # instance_from_scenario_exp, activated_vehicle_id_exp, ready_in_horizon_vehicle_id_exp = Scenario.scenario_to_instance_exp(scenario_exp, [0.0, 80.0], [], [], [])
+    # instance_from_scenario_exp, activated_vehicle_id_exp, ready_in_horizon_vehicle_id_exp = Scenario.scenario_to_instance_exp(scenario_exp, [0.0, 50.0], [], [], [])
     # solution = solve(instance_from_scenario_exp, solver="exact", is_numerical_exp=False)
     # visualize_result(solution, activated_vehicle_id_exp)
     #
-    # instance_from_scenario_true, activated_vehicle_id_true = Scenario.scenario_to_instance_true(scenario_true, 80.0)
-    # solution = solve(instance_from_scenario_true, solver="run_RHC", is_numerical_exp=True,
-    #                  planned_resource_assignment=solution.assigned_resources,
-    #                  planned_operation_start_times=solution.start_times,
-    #                  vehicle_original_id=list(range(len(activated_vehicle_id_exp))))
-    # visualize_result(solution, activated_vehicle_id_true)
+    instance_from_scenario_true, activated_vehicle_id_true = Scenario.scenario_to_instance_true(scenario_true, 100.0)
+    solution = solve(instance_from_scenario_true, solver="run_RHC", is_numerical_exp=True,
+                     planned_resource_assignment=solution.assigned_resources,
+                     planned_operation_start_times=solution.start_times,
+                     vehicle_original_id=list(range(len(activated_vehicle_id_exp))))
+    visualize_result(solution, activated_vehicle_id_true)
+
+    instance_from_scenario_exp, activated_vehicle_id_exp, ready_in_horizon_vehicle_id_exp = Scenario.scenario_to_instance_exp(scenario_exp, [40.0, 90.0], [42, 145, 72, 98, 171, 237, 10, 100], [0, 0, 3, 2, 2, 2, 2, 2], [40.03, 42.2, 40.0, 53.8, 41.8, 55.4, 43.8, 55.5])
+    solution = solve(instance_from_scenario_exp, solver="exact_RHC", is_numerical_exp=False, processing_vehicles_op=[0, 0, 3, 2, 2, 2, 2, 2], processing_vehicles_res=[0, 1, 3, 5, 6, 7, 8, 9], horizon_start=40.0, obj_option="weighted_sum")
+    visualize_result(solution, activated_vehicle_id_exp, [42, 145, 72, 98, 171, 237, 10, 100], [0, 0, 3, 2, 2, 2, 2, 2])
 
     print("Test End")

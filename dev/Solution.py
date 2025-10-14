@@ -16,10 +16,12 @@ class Solution:
         departure_time_tardiness: np.ndarray,
         resource_ind: List[List[int]],
         solver_type: str,
+        objective_weights: List[float],
         # Instance data for induced solution informations
         instance: Optional['Instance'] = None,
         is_deadlock: bool = False,
         is_runtime_over: bool = False,
+        objective_option: Optional[str] = None,
     ):
         # Core solver results
         self.obj_val = obj_val
@@ -36,6 +38,8 @@ class Solution:
         self.instance = instance
         self.is_deadlock = is_deadlock
         self.is_runtime_over = is_runtime_over
+        self.objective_option = objective_option
+        self.objective_weights = objective_weights
 
         # Physical characteristics and metadata (from instance)
         if instance:
@@ -87,6 +91,11 @@ class Solution:
         # Total tardiness metrics
         self.total_arrival_tardiness = np.sum(self.arrival_time_tardiness)
         self.total_departure_tardiness = np.sum(self.departure_time_tardiness)
+
+        # Max tardiness metrics
+        self.max_arrival_tardiness = np.max(self.arrival_time_tardiness)
+        self.max_departure_tardiness = np.max(self.departure_time_tardiness)
+        self.max_vehicle_wise_tardiness = np.max(self.arrival_time_tardiness + self.departure_time_tardiness)
         
         # Resource utilization
         self.resource_utilization = self._compute_resource_utilization()
@@ -152,8 +161,14 @@ class Solution:
             'runtime_seconds': self.solver_runtime,
             'total_arrival_tardiness': self.total_arrival_tardiness,
             'total_departure_tardiness': self.total_departure_tardiness,
+            'total_tardiness': self.total_arrival_tardiness + self.total_departure_tardiness,
             'avg_arrival_tardiness': self.total_arrival_tardiness / self.num_vehicles if self.num_vehicles is not None and self.num_vehicles > 0 else 0,
             'avg_departure_tardiness': self.total_departure_tardiness / self.num_vehicles if self.num_vehicles is not None and self.num_vehicles > 0 else 0,
+            'avg_total_tardiness': (self.total_arrival_tardiness + self.total_departure_tardiness) / self.num_vehicles if self.num_vehicles is not None and self.num_vehicles > 0 else 0,
+            'max_arrival_tardiness': self.max_arrival_tardiness,
+            'max_departure_tardiness': self.max_departure_tardiness,
+            'sum_of_max_tardiness': self.max_arrival_tardiness + self.max_departure_tardiness,
+            'max_vehicle_wise_tardiness': self.max_vehicle_wise_tardiness,
             'total_vehicles': self.num_vehicles if self.num_vehicles is not None else 0,
             'solver': self.solver_type,
             'simulation_end_time': self.sim_end_time,

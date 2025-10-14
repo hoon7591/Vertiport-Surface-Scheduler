@@ -759,7 +759,10 @@ class VertiportSimulator:
         
         # Update vehicle state
         state = vehicle.state
-        vehicle.state = VehicleState(state.value + 1)  # Move to next state
+        if state == VehicleState.DEPARTED:
+            pass
+        else:
+            vehicle.state = VehicleState(state.value + 1)  # Move to next state
         if state == VehicleState.TAKING_OFF:
             vehicle.state = VehicleState.DEPARTED
             # Vehicle completed all operations
@@ -1174,9 +1177,11 @@ class VertiportSimulator:
             departure_time_tardiness=departure_time_tardiness,
             resource_ind=self._build_resource_ranges(),
             solver_type=solver_type,
+            objective_weights=weights,
             instance=self.instance,
             is_deadlock=is_deadlock,
-            is_runtime_over=is_runtime_over
+            is_runtime_over=is_runtime_over,
+            objective_option=None
         )
 
 

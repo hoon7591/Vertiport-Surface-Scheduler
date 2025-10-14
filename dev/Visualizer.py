@@ -81,24 +81,24 @@ def visualize_result(solution, vehicle_ids, *arg):
                 if o != num_operations - 1:
                     waiting_duration = solution.waiting_times[v, o]
 
-                if duration <= 0 and waiting_duration <= 0:
+                if duration <= 1e-06 and waiting_duration <= 1e-06:
                     continue
 
                 res = int(assigned_resources[v][o])
                 y = res
 
                 # Draw main operation bar
-                if duration > 0:
+                if duration > 1e-06:
                     ax.barh(y, duration, left=start, height=0.4, color=colors[o], edgecolor='black', zorder=1)
 
                 # Draw waiting bar using solution's waiting times
                 if o != num_operations - 1:
-                    if waiting_duration > 0:
+                    if waiting_duration > 1e-06:
                         ax.barh(y, waiting_duration, left=finish, height=0.4, color='gray', edgecolor='black', zorder=1)
                         ax.text(start_times[v][o + 1], y, f'{start_times[v][o + 1]:.1f}', ha='left', va='center', fontsize=10, color='black')
 
                 # Vehicle ID centered
-                if duration > 0:
+                if duration > 1e-06:
                     ax.text(start + duration / 2, y, f'V{vehicle_ids[v]}\nP:{duration:.1f}\ntype{vehicle_type[v]}', ha='center', va='center', fontsize=10, color='black')
 
                     # Start time on left edge
@@ -183,9 +183,25 @@ def visualize_result(solution, vehicle_ids, *arg):
     ax.set_yticklabels(ytick_labels)
     ax.set_xlabel('Time (min)')
     ax.set_ylim(-1, num_resources + 1)
-    ax.set_title(f"Resource-Centric Gantt | Obj: {obj_val - tardiness_correction:.2f}, "
-                 f"Total AT: {solution.total_arrival_tardiness:.2f}, Total DT: {solution.total_departure_tardiness:.2f}, "
-                 f"Runtime: {solver_runtime:.2f}s, Sim End Time: {sim_end_time:.2f}min, Solver: {solver_type}")
+    if solver_type in ["exact", "exact_RHC", "FCFS_SAT", "FCFS_Gurobi", "FCFS_landing_SAT", "FCFS_landing_Gurobi"]:
+        ax.set_title(f"Resource-Centric Gantt | Obj: {obj_val - tardiness_correction:.2f}, "
+                     f"Total AT: {solution.total_arrival_tardiness:.2f}min, Total DT: {solution.total_departure_tardiness:.2f}min, "
+                     f"Runtime: {solver_runtime:.2f}s, Sim End Time: {sim_end_time:.2f}min, "
+                     f"Solver: {solver_type}, Obj Option: {solution.objective_option}\n"
+                     f"Total T: {solution.total_arrival_tardiness + solution.total_departure_tardiness:.2f}min, "
+                     f"Average T: {(solution.total_arrival_tardiness + solution.total_departure_tardiness) / num_vehicles if num_vehicles > 0 else 0:.2f}min, "
+                     f"Max AT: {solution.max_arrival_tardiness:.2f}min, Max DT: {solution.max_departure_tardiness:.2f}min, "
+                     f"Max Vehicle-wise T: {solution.max_vehicle_wise_tardiness:.2f}min, Num Vehicles: {num_vehicles}, "
+                     f"Weights: [{solution.objective_weights[0]:.2f}, {solution.objective_weights[1]:.2f}]")
+    else:
+        ax.set_title(f"Resource-Centric Gantt | Obj: {obj_val - tardiness_correction:.2f}, "
+                     f"Total AT: {solution.total_arrival_tardiness:.2f}min, Total DT: {solution.total_departure_tardiness:.2f}min, "
+                     f"Runtime: {solver_runtime:.2f}s, Sim End Time: {sim_end_time:.2f}min, Solver: {solver_type}\n"
+                     f"Total T: {solution.total_arrival_tardiness + solution.total_departure_tardiness:.2f}min, "
+                     f"Average T: {(solution.total_arrival_tardiness + solution.total_departure_tardiness) / num_vehicles if num_vehicles > 0 else 0:.2f}min, "
+                     f"Max AT: {solution.max_arrival_tardiness:.2f}min, Max DT: {solution.max_departure_tardiness:.2f}min, "
+                     f"Max Vehicle-wise T: {solution.max_vehicle_wise_tardiness:.2f}min, Num Vehicles: {num_vehicles}, "
+                     f"Weights: [{solution.objective_weights[0]:.2f}, {solution.objective_weights[1]:.2f}]")
 
     # Legend
     legend_ops = [mpatches.Patch(color=colors[i], label=operation_labels[i]) for i in range(num_operations)]

@@ -255,7 +255,7 @@ class Scenario:
 
         ready = np.zeros(scenario_exp.num_vehicles)
         for i in range(scenario_exp.num_vehicles):
-            ready[i] = scenario_exp.vehicle_arrival_times[i] + np.random.normal(0, config.disturbance_std_ready)
+            ready[i] = scenario_exp.vehicle_arrival_times[i] + np.clip(np.random.normal(0, config.disturbance_std_ready), -5.0, None)
 
         proc_landing = np.zeros((scenario_exp.num_vehicles, scenario_exp.num_pad))
         proc_gate = np.zeros((scenario_exp.num_vehicles, scenario_exp.num_gate))

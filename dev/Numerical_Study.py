@@ -71,7 +71,7 @@ def Numerical_Experiment(exp_config: ExperimentConfig = ExperimentConfig()):
         pads = cfg_list[-2]
         gates = cfg_list[-1]
         buffers = pads  # matches your original choice
-        vehicles_list = cfg_list[:2]
+        vehicles_list = cfg_list[:-2]
 
         for i in range(len(vehicles_list)):
             num_vehicles = vehicles_list[i]
