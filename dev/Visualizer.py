@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+import numpy as np
 
 
 def _get_operation_display_info(is_unified_buffer, num_buffer_in, num_buffer_out, num_buffer):
@@ -30,7 +31,7 @@ def _get_operation_display_info(is_unified_buffer, num_buffer_in, num_buffer_out
     return operation_labels, colors
 
 
-def visualize_result(solution, vehicle_ids, *arg):
+def visualize_gantt(solution, vehicle_ids, *arg):
     # Use solution's enhanced data instead of extracting from instance
     num_operations = solution.num_operations
     num_resources = solution.num_resources
@@ -213,4 +214,48 @@ def visualize_result(solution, vehicle_ids, *arg):
 
     ax.grid(True, linestyle='--', alpha=0.5)
     plt.tight_layout()
+    plt.show()
+
+
+def visualize_top5_vehicle_wise_delay(solution, vehicle_ids):
+    # Define info data
+    num_vehicles = solution.num_vehicles
+    arrival_tardiness = solution.arrival_time_tardiness
+    departure_tardiness = solution.departure_time_tardiness
+    total_tardiness = arrival_tardiness + departure_tardiness
+
+    # Extract Top 5 vehicles by total tardiness
+    top5_tardy_vehicle_ids = np.argsort(total_tardiness)[-5:][::-1]
+    top5_arrival_tardiness = arrival_tardiness[top5_tardy_vehicle_ids]
+    top5_departure_tardiness = departure_tardiness[top5_tardy_vehicle_ids]
+    top5_total_tardiness = total_tardiness[top5_tardy_vehicle_ids]
+
+    sorted_order = np.argsort(top5_total_tardiness)
+    top5_tardy_vehicle_ids = top5_tardy_vehicle_ids[sorted_order]
+    top5_arrival_tardiness = top5_arrival_tardiness[sorted_order]
+    top5_departure_tardiness = top5_departure_tardiness[sorted_order]
+    top5_total_tardiness = top5_total_tardiness[sorted_order]
+
+    # Draw bars and text for tardiness chart
+    _, ax = plt.subplots(figsize=(12, 8))
+
+    yticks = list(range(len(top5_tardy_vehicle_ids)))
+    ytick_labels = [f"V{v}" for v in top5_tardy_vehicle_ids]
+
+    for i in range(len(top5_tardy_vehicle_ids)):
+        ax.barh(i, top5_arrival_tardiness[i], left=0.0, height=0.5, color='red', edgecolor='black', zorder=1)
+        ax.barh(i, top5_departure_tardiness[i], left=top5_arrival_tardiness[i], height=0.5, color='blue', edgecolor='black', zorder=1)
+        if top5_arrival_tardiness[i] <= 0.2:
+            ax.text(0.01, i - 0.27, f'AT:{top5_arrival_tardiness[i]:.2f}', ha='left', va='top', fontsize=10, color='black')
+        else:
+            ax.text(top5_arrival_tardiness[i] / 2, i, f'AT:{top5_arrival_tardiness[i]:.2f}', ha='center', va='center', fontsize=10, color='black')
+        if top5_departure_tardiness[i] <= 0.2:
+            ax.text(top5_arrival_tardiness[i] + 0.01, i - 0.27, f'DT:{top5_departure_tardiness[i]:.2f}', ha='left', va='top', fontsize=10, color='black')
+        else:
+            ax.text(top5_arrival_tardiness[i] + top5_departure_tardiness[i] / 2, i, f'DT:{top5_departure_tardiness[i]:.2f}', ha='center', va='center', fontsize=10, color='black')
+        ax.text(top5_arrival_tardiness[i] + top5_departure_tardiness[i] + 0.15, i, f'Total:{top5_total_tardiness[i]:.2f}', ha='left', va='center', fontsize=10, color='black')
+
+    ax.set_xlim(0.0, np.max(total_tardiness) * 1.2)
+    ax.set_yticks(yticks)
+    ax.set_yticklabels(ytick_labels)
     plt.show()

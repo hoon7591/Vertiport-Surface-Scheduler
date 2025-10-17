@@ -73,6 +73,7 @@ class Scenario:
         is_unified_buffer: bool,
         vehicle_arrival_times: np.ndarray,
         proc: list,
+        first_activated_time_of_ready: np.ndarray,
         vehicle_planned_arrival_times: np.ndarray,
         vehicle_planned_departure_times: np.ndarray,
         vehicle_planned_gate_close_times: np.ndarray,
@@ -104,6 +105,7 @@ class Scenario:
         self.is_unified_buffer = is_unified_buffer
         self.vehicle_arrival_times = vehicle_arrival_times
         self.proc = proc
+        self.first_activated_time_of_ready = first_activated_time_of_ready
         self.vehicle_planned_arrival_times = vehicle_planned_arrival_times
         self.vehicle_planned_departure_times = vehicle_planned_departure_times
         self.vehicle_planned_gate_close_times = vehicle_planned_gate_close_times
@@ -238,6 +240,8 @@ class Scenario:
 
         ST_rounded = {k: round_nested_list(v, digits=2) for k, v in ST.items()}
 
+        first_activated_time_of_ready = np.zeros(num_vehicles)
+
         M = config.operation_hour * 60.0 + (proc_landing.sum() / config.num_pad + proc_gate.sum() / config.num_gate + proc_takeoff.sum() / config.num_pad) / 2
 
         return cls(
@@ -245,7 +249,8 @@ class Scenario:
             config.num_buffer_in, config.num_gate, config.num_buffer_out, config.num_buffer, num_resource, config.objective_weights,
             config.proc_air_v, config.proc_air_r, config.proc_air_o, config.proc_gate_v, st_list, config.operation_hour * 60.0,
             config.ETA_ready_diff, config.ETD_margin, config.gate_close_margin, config.is_unified_buffer, ready, proc,
-            vehicle_planned_arrival_times, vehicle_planned_departure_times, vehicle_planned_gate_close_times, ST_rounded, vehicle_type, M
+            first_activated_time_of_ready, vehicle_planned_arrival_times, vehicle_planned_departure_times, vehicle_planned_gate_close_times,
+            ST_rounded, vehicle_type, M
         )
 
 
@@ -310,26 +315,32 @@ class Scenario:
                 else:
                     proc = [proc_landing, proc_buffer_in, proc_gate, proc_buffer_out, proc_takeoff]
 
+        first_activated_time_of_ready = np.zeros(scenario_exp.num_vehicles)
+
         return cls(
-            scenario_exp.seed, scenario_exp.num_operations, scenario_exp.num_vehicles_per_hour, scenario_exp.num_vehicles, scenario_exp.vehicle_id,
-            scenario_exp.num_pad, scenario_exp.num_buffer_in, scenario_exp.num_gate, scenario_exp.num_buffer_out, scenario_exp.num_buffer, scenario_exp.num_resource,
-            scenario_exp.objective_weights, scenario_exp.proc_air_v, scenario_exp.proc_air_r, scenario_exp.proc_air_o, scenario_exp.proc_gate_v, scenario_exp.st_list,
-            config.operation_hour * 60.0, scenario_exp.ETA_ready_diff, scenario_exp.ETD_margin, scenario_exp.gate_close_margin, scenario_exp.is_unified_buffer, ready, proc,
-            scenario_exp.vehicle_planned_arrival_times, scenario_exp.vehicle_planned_departure_times,
+            scenario_exp.seed, scenario_exp.num_operations, scenario_exp.num_vehicles_per_hour, scenario_exp.num_vehicles,
+            scenario_exp.vehicle_id, scenario_exp.num_pad, scenario_exp.num_buffer_in, scenario_exp.num_gate, scenario_exp.num_buffer_out,
+            scenario_exp.num_buffer, scenario_exp.num_resource, scenario_exp.objective_weights, scenario_exp.proc_air_v,
+            scenario_exp.proc_air_r, scenario_exp.proc_air_o, scenario_exp.proc_gate_v, scenario_exp.st_list, config.operation_hour * 60.0,
+            scenario_exp.ETA_ready_diff, scenario_exp.ETD_margin, scenario_exp.gate_close_margin, scenario_exp.is_unified_buffer,
+            ready, proc, scenario_exp.num_vehicles, scenario_exp.vehicle_planned_arrival_times, scenario_exp.vehicle_planned_departure_times,
             scenario_exp.vehicle_planned_gate_close_times, scenario_exp.ST, scenario_exp.vehicle_type, scenario_exp.big_M
         )
 
 
     @classmethod
-    def scenario_to_instance_exp(cls, scenario, horizon, processing_vehicles_id, processing_vehicles_op,
-                                 finish_times_of_processing_vehicles_exp):
-        ready_in_horizon_vehicle_id_exp = [i for i, x in enumerate(scenario.vehicle_arrival_times) if
+    def scenario_to_instance_exp(cls, scenario_exp_init, scenario_exp, scenario_true, horizon, update_interval,
+                                 processing_vehicles_id, processing_vehicles_op, finish_times_of_processing_vehicles_exp,
+                                 std_param_from_update_interval):
+        ready_in_horizon_vehicle_id_exp = [i for i, x in enumerate(scenario_exp.vehicle_arrival_times) if
                                            horizon[0] <= x <= horizon[1]]
+        newly_ready_in_horizon_vehicle_id_exp = [i for i, x in enumerate(scenario_exp.vehicle_arrival_times) if
+                                                 horizon[1] - update_interval <= x <= horizon[1]]
         activated_vehicle_id_exp = processing_vehicles_id + ready_in_horizon_vehicle_id_exp
 
         proc_in_horizon = [
-            [[row_res for row_res in scenario.proc[op][v]] for v in activated_vehicle_id_exp]
-            for op in range(len(scenario.proc))
+            [[row_res for row_res in scenario_exp.proc[op][v]] for v in activated_vehicle_id_exp]
+            for op in range(len(scenario_exp.proc))
         ]
         for i in range(len(processing_vehicles_id)):
             for j in range(processing_vehicles_op[i] + 1):
@@ -340,31 +351,43 @@ class Scenario:
                     else:
                         proc_in_horizon[j][i][k] = 0.0
 
-        ready_in_horizon = scenario.vehicle_arrival_times[activated_vehicle_id_exp]
-        for i in range(len(processing_vehicles_id)):
-            ready_in_horizon[i] = 0.0
+        ready_in_horizon_exp_init = scenario_exp_init.vehicle_arrival_times[activated_vehicle_id_exp]
+        ready_in_horizon_exp = scenario_exp.vehicle_arrival_times[activated_vehicle_id_exp]
+        ready_in_horizon_true = scenario_true.vehicle_arrival_times[activated_vehicle_id_exp]
 
-        vehicle_planned_arrival_times_in_horizon = scenario.vehicle_planned_arrival_times[activated_vehicle_id_exp]
-        vehicle_planned_departure_times_in_horizon = scenario.vehicle_planned_departure_times[activated_vehicle_id_exp]
-        vehicle_planned_gate_close_times_in_horizon = scenario.vehicle_planned_gate_close_times[activated_vehicle_id_exp]
-        vehicle_type_in_horizon = scenario.vehicle_type[activated_vehicle_id_exp]
+        for i in range(len(processing_vehicles_id)):
+            ready_in_horizon_exp[i] = 0.0
+
+        for i in range(len(processing_vehicles_id), len(activated_vehicle_id_exp)):
+            if activated_vehicle_id_exp[i] not in newly_ready_in_horizon_vehicle_id_exp:
+                ready_in_horizon_exp[i] = ready_in_horizon_exp_init[i] + horizon[0] * (ready_in_horizon_true[i] - ready_in_horizon_exp_init[i]) \
+                                          / (ready_in_horizon_true[i] - scenario_exp.first_activated_time_of_ready[activated_vehicle_id_exp[i]]) \
+                                          + np.random.normal(0, update_interval * std_param_from_update_interval * (ready_in_horizon_true[i] - horizon[0])
+                                                             / (ready_in_horizon_true[i] - scenario_exp.first_activated_time_of_ready[activated_vehicle_id_exp[i]]))
+            else:
+                scenario_exp.first_activated_time_of_ready[activated_vehicle_id_exp[i]] = ready_in_horizon_true[i] - horizon[0]
+
+        vehicle_planned_arrival_times_in_horizon = scenario_exp.vehicle_planned_arrival_times[activated_vehicle_id_exp]
+        vehicle_planned_departure_times_in_horizon = scenario_exp.vehicle_planned_departure_times[activated_vehicle_id_exp]
+        vehicle_planned_gate_close_times_in_horizon = scenario_exp.vehicle_planned_gate_close_times[activated_vehicle_id_exp]
+        vehicle_type_in_horizon = scenario_exp.vehicle_type[activated_vehicle_id_exp]
 
         o_key_map = {
             0: (0, 0),
-            1: (0, scenario.num_operations - 1),
-            2: (scenario.num_operations - 1, 0),
-            3: (scenario.num_operations - 1, scenario.num_operations - 1)
+            1: (0, scenario_exp.num_operations - 1),
+            2: (scenario_exp.num_operations - 1, 0),
+            3: (scenario_exp.num_operations - 1, scenario_exp.num_operations - 1)
         }
         ST_in_horizon = {}
-        for o in range(len(scenario.st_list)):
+        for o in range(len(scenario_exp.st_list)):
             key = o_key_map[o]
             ST_in_horizon[key] = []
             for i in activated_vehicle_id_exp:
                 row = []
-                v_i = scenario.vehicle_type[i]
+                v_i = scenario_exp.vehicle_type[i]
                 for j in activated_vehicle_id_exp:
-                    v_j = scenario.vehicle_type[j]
-                    row.append(scenario.st_list[o][v_i][v_j])
+                    v_j = scenario_exp.vehicle_type[j]
+                    row.append(scenario_exp.st_list[o][v_i][v_j])
                 ST_in_horizon[key].append(row)
 
         def round_nested_list(lst, digits=2):
@@ -378,13 +401,13 @@ class Scenario:
         ST_rounded_in_horizon = {k: round_nested_list(v, digits=2) for k, v in ST_in_horizon.items()}
 
         return Instance(
-            scenario.seed, scenario.num_operations, len(activated_vehicle_id_exp), scenario.num_pad, scenario.num_buffer_in,
-            scenario.num_gate, scenario.num_buffer_out, scenario.num_buffer, scenario.num_resource, scenario.objective_weights,
-            scenario.proc_air_v, scenario.proc_air_r, scenario.proc_air_o, scenario.proc_gate_v, scenario.st_list,
-            scenario.maximum_arrival_time, scenario.ETA_ready_diff, scenario.ETD_margin, scenario.gate_close_margin,
-            scenario.is_unified_buffer, ready_in_horizon, proc_in_horizon, vehicle_planned_arrival_times_in_horizon,
+            scenario_exp.seed, scenario_exp.num_operations, len(activated_vehicle_id_exp), scenario_exp.num_pad, scenario_exp.num_buffer_in,
+            scenario_exp.num_gate, scenario_exp.num_buffer_out, scenario_exp.num_buffer, scenario_exp.num_resource, scenario_exp.objective_weights,
+            scenario_exp.proc_air_v, scenario_exp.proc_air_r, scenario_exp.proc_air_o, scenario_exp.proc_gate_v, scenario_exp.st_list,
+            scenario_exp.maximum_arrival_time, scenario_exp.ETA_ready_diff, scenario_exp.ETD_margin, scenario_exp.gate_close_margin,
+            scenario_exp.is_unified_buffer, ready_in_horizon_exp, proc_in_horizon, vehicle_planned_arrival_times_in_horizon,
             vehicle_planned_departure_times_in_horizon, vehicle_planned_gate_close_times_in_horizon, ST_rounded_in_horizon,
-            vehicle_type_in_horizon, scenario.big_M
+            vehicle_type_in_horizon, scenario_exp.big_M
         ), activated_vehicle_id_exp, ready_in_horizon_vehicle_id_exp
 
     @classmethod
