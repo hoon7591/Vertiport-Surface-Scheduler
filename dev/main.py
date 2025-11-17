@@ -4,7 +4,7 @@ from Visualizer import visualize_gantt, visualize_top5_vehicle_wise_delay
 from Instance import InstanceConfig
 from VertiportSimulator import VertiportSimulator
 from Numerical_Study import ExperimentConfig, Numerical_Experiment
-from Scenario import ScenarioConfig, Scenario
+from Scenario import ScenarioRHCConfig, Scenario
 import numpy as np
 
 """
@@ -76,23 +76,23 @@ if __name__ == "__main__":
 
     # Scenario Test
     ### For test of Run_RHC by setting std as zero (same results between run and solve are expected) ###
-    # scenario_config = ScenarioConfig(horizon=30.0, update_interval=3.0, operation_hour=18, num_vehicles_per_hour=15,
-    #                                  disturbance_std_proc=[0.0, 0.0, 0.0], disturbance_std_ready=0.0,
-    #                                  is_unified_buffer=True, num_pad=2, num_buffer=2, num_gate=6)
-    # scenario_exp = Scenario.from_scenario_config_exp(scenario_config)
-    # scenario_true = Scenario.from_scenario_config_true(scenario_config, scenario_exp)
+    # scenario_RHC_config = ScenarioRHCConfig(horizon=30.0, update_interval=3.0, operation_hour=18, num_vehicles_per_hour=15,
+    #                                      disturbance_std_proc=[0.0, 0.0, 0.0], disturbance_std_ready=0.0,
+    #                                      is_unified_buffer=True, num_pad=2, num_buffer=2, num_gate=6)
+    # scenario_exp = Scenario.from_scenario_config_exp(scenario_RHC_config)
+    # scenario_true = Scenario.from_scenario_config_true(scenario_RHC_config, scenario_exp)
     ### For test with non-zero std (different results between run and solve are expected) ###
-    scenario_config = ScenarioConfig(horizon=30.0, update_interval=3.0, operation_hour=18, num_vehicles_per_hour=15,
-                                     disturbance_std_proc=[0.3, 0.5, 0.3], disturbance_std_ready=5.0,
-                                     is_unified_buffer=True, num_pad=2, num_buffer=2, num_gate=6)
-    scenario_exp = Scenario.from_scenario_config_exp(scenario_config)
-    scenario_true = Scenario.from_scenario_config_true(scenario_config, scenario_exp)
+    scenario_RHC_config = ScenarioRHCConfig(scheduling_horizon_length=50.0, update_interval=1.0, operation_hour=18, num_vehicles_per_hour=15,
+                                            disturbance_std_proc=[0.3, 0.5, 0.3], disturbance_std_ready=5.0,
+                                            is_unified_buffer=True, num_pad=2, num_buffer=2, num_gate=6)
+    scenario_exp = Scenario.from_scenario_config_exp(scenario_RHC_config)
+    scenario_true = Scenario.from_scenario_config_true(scenario_RHC_config, scenario_exp)
 
     ###########################################
     ####### receding horizon controller #######
     ###########################################
 
-    instance_from_scenario_exp, activated_vehicle_id_exp, ready_in_horizon_vehicle_id_exp = Scenario.scenario_to_instance_exp(scenario_exp, [0.0, 100.0], 100.0, [], [], [])
+    instance_from_scenario_exp, activated_vehicle_id_exp, ready_in_horizon_vehicle_id_exp = Scenario.scenario_to_instance_exp(scenario_exp, scenario_true, [0.0, 100.0], 100.0, [], [], [])
     solution = solve(instance_from_scenario_exp, solver="exact", is_numerical_exp=False)
     visualize_gantt(solution, activated_vehicle_id_exp)
     #
@@ -127,7 +127,7 @@ if __name__ == "__main__":
                      vehicle_original_id=list(range(len(activated_vehicle_id_exp))))
     visualize_gantt(solution, activated_vehicle_id_true)
 
-    instance_from_scenario_exp, activated_vehicle_id_exp, ready_in_horizon_vehicle_id_exp = Scenario.scenario_to_instance_exp(scenario_exp, [40.0, 90.0], 3.0, [42, 145, 72, 98, 171, 237, 10, 100], [0, 0, 3, 2, 2, 2, 2, 2], [40.03, 42.2, 40.0, 53.8, 41.8, 55.4, 43.8, 55.5])
+    instance_from_scenario_exp, activated_vehicle_id_exp, ready_in_horizon_vehicle_id_exp = Scenario.scenario_to_instance_exp(scenario_exp, scenario_true, [40.0, 90.0], 3.0, [42, 145, 72, 98, 171, 237, 10, 100], [0, 0, 3, 2, 2, 2, 2, 2], [40.03, 42.2, 40.0, 53.8, 41.8, 55.4, 43.8, 55.5])
     solution = solve(instance_from_scenario_exp, solver="exact_RHC", is_numerical_exp=False, processing_vehicles_op=[0, 0, 3, 2, 2, 2, 2, 2], processing_vehicles_res=[0, 1, 3, 5, 6, 7, 8, 9], horizon_start=40.0, obj_option="weighted_sum")
     visualize_gantt(solution, activated_vehicle_id_exp, [42, 145, 72, 98, 171, 237, 10, 100], [0, 0, 3, 2, 2, 2, 2, 2])
 

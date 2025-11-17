@@ -2,10 +2,11 @@ from typing import Any, List
 import numpy as np
 from dataclasses import dataclass, field
 from Instance import Instance
+import copy
 
 
 @dataclass
-class ScenarioConfig:
+class ScenarioRHCConfig:
     """Configuration class for generating an instance of the UAM-VS-Scheduling Problem.
     This class holds the parameters required to create a problem instance, including
     the number of operations, vehicles, pads, gates, and various processing times.
@@ -37,13 +38,18 @@ class ScenarioConfig:
     gate_close_margin: float = 3.0
     is_unified_buffer: bool = False
 
-
     # for receding horizon control
-    horizon: float = 30.0  # in minutes
-    update_interval: float = 3.0  # in minutes
+    scheduling_horizon_length: float = 50.0  # in minutes
+    update_interval: float = 1.0  # in minutes
+    std_param_from_update_interval: float = 3.0
     operation_hour: int = 18
-    disturbance_std_proc: List[float] = field(default_factory=lambda: [0.2, 1.0, 0.2])
-    disturbance_std_ready: float = 1.0
+    disturbance_std_proc: List[float] = field(default_factory=lambda: [0.3, 0.5, 0.3])
+    disturbance_std_ready: float = 5.0
+    dynamic_arrival_v_id: List[int] = field(default_factory=lambda: [])
+    dynamic_arrival_aware_time: List[float] = field(default_factory=lambda: [20.0, 4.0])        # [mean, std]
+    dynamic_proc_v_id: List[int] = field(default_factory=lambda: [])
+    dynamic_proc_op: List[int] = field(default_factory=lambda: [])
+    dynamic_proc_inc_time: List[float] = field(default_factory=lambda: [])          # specifically defined by user
 
 
 class Scenario:
@@ -80,6 +86,10 @@ class Scenario:
         ST: dict,
         vehicle_type: np.ndarray,
         M: float,
+        whether_vehicle_dynamic_arrival: np.ndarray,
+        vehicle_dynamic_arrival_aware_time: np.ndarray,
+        proc_real: list,
+        std_param_from_update_interval: float,
     ):
         self.seed = seed
         self.num_operations = num_operations
@@ -112,9 +122,13 @@ class Scenario:
         self.ST = ST
         self.vehicle_type = vehicle_type
         self.big_M = M
+        self.whether_vehicle_dynamic_arrival = whether_vehicle_dynamic_arrival
+        self.vehicle_dynamic_arrival_aware_time = vehicle_dynamic_arrival_aware_time
+        self.proc_real = proc_real
+        self.std_param_from_update_interval = std_param_from_update_interval
 
     @classmethod
-    def from_scenario_config_exp(cls, config: "ScenarioConfig") -> "Scenario":
+    def from_scenario_config_exp(cls, config: "ScenarioRHCConfig") -> "Scenario":
         np.random.seed(config.seed)
         num_vehicles = config.num_vehicles_per_hour * config.operation_hour
         vehicle_id = np.arange(num_vehicles)
@@ -241,8 +255,13 @@ class Scenario:
         ST_rounded = {k: round_nested_list(v, digits=2) for k, v in ST.items()}
 
         first_activated_time_of_ready = np.zeros(num_vehicles)
-
         M = config.operation_hour * 60.0 + (proc_landing.sum() / config.num_pad + proc_gate.sum() / config.num_gate + proc_takeoff.sum() / config.num_pad) / 2
+
+        whether_vehicle_dynamic_arrival = np.isin(vehicle_id, config.dynamic_arrival_v_id)
+        vehicle_dynamic_arrival_aware_time = np.full(num_vehicles, np.nan)
+        for i in range(num_vehicles):
+            if whether_vehicle_dynamic_arrival[i]:
+                vehicle_dynamic_arrival_aware_time[i] = max(12.0, np.random.normal(config.dynamic_arrival_aware_time[0], config.dynamic_arrival_aware_time[1]))
 
         return cls(
             config.seed, config.num_operations, config.num_vehicles_per_hour, num_vehicles, vehicle_id, config.num_pad,
@@ -250,17 +269,21 @@ class Scenario:
             config.proc_air_v, config.proc_air_r, config.proc_air_o, config.proc_gate_v, st_list, config.operation_hour * 60.0,
             config.ETA_ready_diff, config.ETD_margin, config.gate_close_margin, config.is_unified_buffer, ready, proc,
             first_activated_time_of_ready, vehicle_planned_arrival_times, vehicle_planned_departure_times, vehicle_planned_gate_close_times,
-            ST_rounded, vehicle_type, M
+            ST_rounded, vehicle_type, M, whether_vehicle_dynamic_arrival, vehicle_dynamic_arrival_aware_time, proc,
+            config.std_param_from_update_interval
         )
 
 
     @classmethod
-    def from_scenario_config_true(cls, config: "ScenarioConfig", scenario_exp) -> "Scenario":
+    def from_scenario_config_true(cls, config: "ScenarioRHCConfig", scenario_exp) -> "Scenario":
         np.random.seed(scenario_exp.seed)
 
         ready = np.zeros(scenario_exp.num_vehicles)
         for i in range(scenario_exp.num_vehicles):
-            ready[i] = scenario_exp.vehicle_arrival_times[i] + np.clip(np.random.normal(0, config.disturbance_std_ready), -5.0, None)
+            if scenario_exp.vehicle_arrival_times[i] <= config.scheduling_horizon_length:
+                ready[i] = scenario_exp.vehicle_arrival_times[i] + np.clip(np.random.normal(0, config.disturbance_std_ready * scenario_exp.vehicle_arrival_times[i] / config.scheduling_horizon_length), None, 5.0)
+            else:
+                ready[i] = scenario_exp.vehicle_arrival_times[i] + np.clip(np.random.normal(0, config.disturbance_std_ready), -5.0, None)
 
         proc_landing = np.zeros((scenario_exp.num_vehicles, scenario_exp.num_pad))
         proc_gate = np.zeros((scenario_exp.num_vehicles, scenario_exp.num_gate))
@@ -315,7 +338,9 @@ class Scenario:
                 else:
                     proc = [proc_landing, proc_buffer_in, proc_gate, proc_buffer_out, proc_takeoff]
 
-        first_activated_time_of_ready = np.zeros(scenario_exp.num_vehicles)
+        proc_real = copy.deepcopy(proc)
+        for i in range(len(config.dynamic_proc_v_id)):
+            proc_real[config.dynamic_proc_op[i]][config.dynamic_proc_v_id[i]] += config.dynamic_proc_inc_time[i]
 
         return cls(
             scenario_exp.seed, scenario_exp.num_operations, scenario_exp.num_vehicles_per_hour, scenario_exp.num_vehicles,
@@ -323,19 +348,30 @@ class Scenario:
             scenario_exp.num_buffer, scenario_exp.num_resource, scenario_exp.objective_weights, scenario_exp.proc_air_v,
             scenario_exp.proc_air_r, scenario_exp.proc_air_o, scenario_exp.proc_gate_v, scenario_exp.st_list, config.operation_hour * 60.0,
             scenario_exp.ETA_ready_diff, scenario_exp.ETD_margin, scenario_exp.gate_close_margin, scenario_exp.is_unified_buffer,
-            ready, proc, scenario_exp.num_vehicles, scenario_exp.vehicle_planned_arrival_times, scenario_exp.vehicle_planned_departure_times,
-            scenario_exp.vehicle_planned_gate_close_times, scenario_exp.ST, scenario_exp.vehicle_type, scenario_exp.big_M
+            ready, proc, scenario_exp.first_activated_time_of_ready, scenario_exp.vehicle_planned_arrival_times,
+            scenario_exp.vehicle_planned_departure_times, scenario_exp.vehicle_planned_gate_close_times, scenario_exp.ST,
+            scenario_exp.vehicle_type, scenario_exp.big_M, scenario_exp.whether_vehicle_dynamic_arrival,
+            scenario_exp.vehicle_dynamic_arrival_aware_time, proc_real, scenario_exp.std_param_from_update_interval
         )
 
 
     @classmethod
-    def scenario_to_instance_exp(cls, scenario_exp_init, scenario_exp, scenario_true, horizon, update_interval,
-                                 processing_vehicles_id, processing_vehicles_op, finish_times_of_processing_vehicles_exp,
-                                 std_param_from_update_interval):
+    def scenario_to_instance_exp(cls, scenario_exp, scenario_true, scheduling_horizon, update_interval,
+                                 processing_vehicles_id, processing_vehicles_op, finish_times_of_processing_vehicles_exp):
+
         ready_in_horizon_vehicle_id_exp = [i for i, x in enumerate(scenario_exp.vehicle_arrival_times) if
-                                           horizon[0] <= x <= horizon[1]]
+                                           scheduling_horizon[0] <= x <= scheduling_horizon[1] *
+                                           (1.0 - scenario_exp.whether_vehicle_dynamic_arrival[i]) + (scheduling_horizon[0] +
+                                           scenario_exp.vehicle_dynamic_arrival_aware_time[i]) * scenario_exp.whether_vehicle_dynamic_arrival[i]]
+
         newly_ready_in_horizon_vehicle_id_exp = [i for i, x in enumerate(scenario_exp.vehicle_arrival_times) if
-                                                 horizon[1] - update_interval <= x <= horizon[1]]
+                                                 scheduling_horizon[1] * (1.0 - scenario_exp.whether_vehicle_dynamic_arrival[i]) +
+                                                 (scheduling_horizon[0] + scenario_exp.vehicle_dynamic_arrival_aware_time[i]) *
+                                                 scenario_exp.whether_vehicle_dynamic_arrival[i] - update_interval <= x <= scheduling_horizon[1] *
+                                                 (1.0 - scenario_exp.whether_vehicle_dynamic_arrival[i]) +
+                                                 (scheduling_horizon[0] + scenario_exp.vehicle_dynamic_arrival_aware_time[i]) *
+                                                 scenario_exp.whether_vehicle_dynamic_arrival[i]]
+
         activated_vehicle_id_exp = processing_vehicles_id + ready_in_horizon_vehicle_id_exp
 
         proc_in_horizon = [
@@ -347,11 +383,10 @@ class Scenario:
                 for k in range(len(proc_in_horizon[j][i])):
                     if j == processing_vehicles_op[i]:
                         if proc_in_horizon[j][i][k] > 0:
-                            proc_in_horizon[j][i][k] = finish_times_of_processing_vehicles_exp[i] - horizon[0]
+                            proc_in_horizon[j][i][k] = finish_times_of_processing_vehicles_exp[i] - scheduling_horizon[0]
                     else:
                         proc_in_horizon[j][i][k] = 0.0
 
-        ready_in_horizon_exp_init = scenario_exp_init.vehicle_arrival_times[activated_vehicle_id_exp]
         ready_in_horizon_exp = scenario_exp.vehicle_arrival_times[activated_vehicle_id_exp]
         ready_in_horizon_true = scenario_true.vehicle_arrival_times[activated_vehicle_id_exp]
 
@@ -360,12 +395,16 @@ class Scenario:
 
         for i in range(len(processing_vehicles_id), len(activated_vehicle_id_exp)):
             if activated_vehicle_id_exp[i] not in newly_ready_in_horizon_vehicle_id_exp:
-                ready_in_horizon_exp[i] = ready_in_horizon_exp_init[i] + horizon[0] * (ready_in_horizon_true[i] - ready_in_horizon_exp_init[i]) \
+                ready_in_horizon_exp[i] = ready_in_horizon_exp[i] + scheduling_horizon[0] * (ready_in_horizon_true[i] - ready_in_horizon_exp[i]) \
                                           / (ready_in_horizon_true[i] - scenario_exp.first_activated_time_of_ready[activated_vehicle_id_exp[i]]) \
-                                          + np.random.normal(0, update_interval * std_param_from_update_interval * (ready_in_horizon_true[i] - horizon[0])
+                                          + np.random.normal(0, update_interval * scenario_exp.std_param_from_update_interval
+                                                             * (ready_in_horizon_true[i] - scheduling_horizon[0])
                                                              / (ready_in_horizon_true[i] - scenario_exp.first_activated_time_of_ready[activated_vehicle_id_exp[i]]))
             else:
-                scenario_exp.first_activated_time_of_ready[activated_vehicle_id_exp[i]] = ready_in_horizon_true[i] - horizon[0]
+                if scheduling_horizon[0] == 0.0 and ready_in_horizon_exp[i] < scheduling_horizon[1] - update_interval:
+                    scenario_exp.first_activated_time_of_ready[activated_vehicle_id_exp[i]] = ready_in_horizon_exp[i] - scheduling_horizon[1]
+                else:
+                    scenario_exp.first_activated_time_of_ready[activated_vehicle_id_exp[i]] = scheduling_horizon[0]
 
         vehicle_planned_arrival_times_in_horizon = scenario_exp.vehicle_planned_arrival_times[activated_vehicle_id_exp]
         vehicle_planned_departure_times_in_horizon = scenario_exp.vehicle_planned_departure_times[activated_vehicle_id_exp]
@@ -413,12 +452,12 @@ class Scenario:
     @classmethod
     def scenario_to_instance_true(cls, scenario, current_time):
         ready_in_horizon_vehicle_id_true = [i for i, x in enumerate(scenario.vehicle_arrival_times) if
-                                           0.0 <= x <= current_time]
+                                            0.0 <= x <= current_time]
         activated_vehicle_id_true = ready_in_horizon_vehicle_id_true
 
         proc_in_horizon = [
-            [[row_res for row_res in scenario.proc[op][v]] for v in activated_vehicle_id_true]
-            for op in range(len(scenario.proc))
+            [[row_res for row_res in scenario.proc_real[op][v]] for v in activated_vehicle_id_true]
+            for op in range(len(scenario.proc_real))
         ]
 
         ready_in_horizon = scenario.vehicle_arrival_times[activated_vehicle_id_true]
