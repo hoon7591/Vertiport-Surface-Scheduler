@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import numpy as np
+import plotly.graph_objects as go
 
 
 def _get_operation_display_info(is_unified_buffer, num_buffer_in, num_buffer_out, num_buffer):
@@ -32,6 +33,13 @@ def _get_operation_display_info(is_unified_buffer, num_buffer_in, num_buffer_out
 
 
 def visualize_gantt(solution, vehicle_ids, *arg):
+    """
+    arg[0]: List of Processing Vehicles IDs to Skip for Visualization
+    arg[1]: List of Processing Vehicles Operation IDs to Skip for Visualization
+    arg[2]: Filename Suffix for Saving the Figure (Current Time)
+    arg[3]: Visualization Mode ('show' or 'save')
+    """
+
     # Use solution's enhanced data instead of extracting from instance
     num_operations = solution.num_operations
     num_resources = solution.num_resources
@@ -79,6 +87,7 @@ def visualize_gantt(solution, vehicle_ids, *arg):
                 # Use solution's method to get finish time
                 finish = solution.get_operation_finish_time(v, o)
                 duration = solution.operation_durations[v, o]
+                waiting_duration = 0.0
                 if o != num_operations - 1:
                     waiting_duration = solution.waiting_times[v, o]
 
@@ -214,7 +223,383 @@ def visualize_gantt(solution, vehicle_ids, *arg):
 
     ax.grid(True, linestyle='--', alpha=0.5)
     plt.tight_layout()
-    plt.show()
+    if arg[3] == 'show':
+        plt.show()
+    elif arg[3] == 'save':
+        plt.savefig(f'{solver_type}_{arg[2]}.pdf', dpi=300)
+        plt.close()
+
+
+def visualize_gantt_plotly(
+    solution,
+    vehicle_ids,
+    skip_vehicle_ids=None,
+    skip_vehicle_ops=None,
+    filename_suffix="0.0",
+    mode="show",              # "show" or "save"
+    current_time=None         # optional vertical line for RHC time
+):
+    """
+    Plot an interactive resource-centric Gantt chart using Plotly.
+
+    Parameters
+    ----------
+    solution : Solution
+        The solution object containing schedule info.
+    vehicle_ids : list[int]
+        Indices (or IDs) of vehicles to visualize (index aligned with solution arrays).
+    skip_vehicle_ids : list[int] or None
+        Vehicles for which part of operations / markers are skipped.
+    skip_vehicle_ops : list[int] or None
+        For each vehicle in skip_vehicle_ids, integer specifying how many operations to skip in visualization logic
+        (kept consistent with your original Matplotlib logic).
+    filename_suffix : str
+        Suffix to add in output filename when mode == "save".
+    mode : {"show", "save"}
+        "show" -> fig.show(), "save" -> write_html(...)
+    current_time : float or None
+        If given, draw a vertical line at this time (e.g., RHC horizon start).
+    """
+
+    if skip_vehicle_ids is None:
+        skip_vehicle_ids = []
+    if skip_vehicle_ops is None:
+        skip_vehicle_ops = []
+
+    # --- Core solution info ---
+    num_operations = solution.num_operations
+    num_resources = solution.num_resources
+    num_vehicles = solution.num_vehicles
+    num_buffer_in = solution.num_buffer_in
+    num_buffer_out = solution.num_buffer_out
+    num_buffer = solution.num_buffer
+    is_unified_buffer = solution.is_unified_buffer
+
+    obj_val = solution.obj_val
+    solver_runtime = solution.solver_runtime
+    sim_end_time = solution.sim_end_time
+    start_times = solution.start_times
+    assigned_resources = solution.assigned_resources
+    arrival_tardiness = solution.arrival_time_tardiness
+    departure_tardiness = solution.departure_time_tardiness
+    solver_type = solution.solver_type
+
+    vehicle_type = solution.vehicle_type
+    ready = solution.ready
+    planned_arrival_times = solution.vehicle_planned_arrival_times
+    planned_departure_times = solution.vehicle_planned_departure_times
+    planned_gate_closing_times = solution.vehicle_planned_gate_close_times
+
+    operation_labels, colors = _get_operation_display_info(
+        is_unified_buffer, num_buffer_in, num_buffer_out, num_buffer
+    )
+
+    tardiness_color = "rgba(214, 39, 40, 1.0)"  # red
+
+    # y-axis labels: one row per resource
+    ytick_labels = [f"R{r}" for r in range(num_resources)]
+
+    fig = go.Figure()
+
+    # To avoid legend spam
+    op_legend_shown = [False] * num_operations
+    waiting_legend_shown = False
+    arr_tard_legend_shown = False
+    dep_tard_legend_shown = False
+    eta_legend_shown = False
+    etd_legend_shown = False
+    ned_legend_shown = False
+    ready_legend_shown = False
+
+    tardiness_correction = 0.0
+
+    # Helper to check skip info
+    def get_skip_op_for_vehicle(veh_id):
+        if veh_id in skip_vehicle_ids:
+            idx = skip_vehicle_ids.index(veh_id)
+            return skip_vehicle_ops[idx]
+        return None
+
+    # --- 1. Operation and waiting bars ---
+    for v_idx, veh_id in enumerate(vehicle_ids):
+        skip_level = get_skip_op_for_vehicle(veh_id)
+
+        for o in range(num_operations):
+            if skip_level is not None and o < skip_level:
+                # Same semantics as your original "skip" logic
+                continue
+
+            start = float(start_times[v_idx, o])
+            finish = float(solution.get_operation_finish_time(v_idx, o))
+            duration = float(solution.operation_durations[v_idx, o])
+
+            waiting_duration = 0.0
+            if o != num_operations - 1:
+                waiting_duration = float(solution.waiting_times[v_idx, o])
+
+            if duration <= 1e-6 and waiting_duration <= 1e-6:
+                continue
+
+            res = int(assigned_resources[v_idx, o])
+            y_label = f"R{res}"
+
+            # Operation bar
+            if duration > 1e-6:
+                fig.add_trace(go.Bar(
+                    x=[duration],
+                    y=[y_label],
+                    base=[start],
+                    orientation="h",
+                    marker=dict(color=colors[o]),
+                    name=operation_labels[o],
+                    showlegend=not op_legend_shown[o],
+                    hovertemplate=(
+                        f"<b>Vehicle V{veh_id}</b><br>"
+                        f"Op: {operation_labels[o]} (#{o})<br>"
+                        f"Resource: {y_label}<br>"
+                        f"Start: {start:.1f}<br>"
+                        f"Finish: {finish:.1f}<br>"
+                        f"Duration: {duration:.1f}<br>"
+                        f"Type: {vehicle_type[v_idx]}<extra></extra>"
+                    )
+                ))
+                op_legend_shown[o] = True
+
+            # Waiting bar (after op o)
+            if o != num_operations - 1 and waiting_duration > 1e-6:
+                fig.add_trace(go.Bar(
+                    x=[waiting_duration],
+                    y=[y_label],
+                    base=[finish],
+                    orientation="h",
+                    marker=dict(color="rgba(120, 120, 120, 0.4)"),
+                    name="Waiting",
+                    showlegend=not waiting_legend_shown,
+                    hovertemplate=(
+                        f"<b>Vehicle V{veh_id}</b><br>"
+                        f"Resource: {y_label}<br>"
+                        f"Waiting: {finish:.1f} → {finish + waiting_duration:.1f}<extra></extra>"
+                    )
+                ))
+                waiting_legend_shown = True
+
+    # --- 2. Tardiness bands (arrival / departure) ---
+    for v_idx, veh_id in enumerate(vehicle_ids):
+        skip_level = get_skip_op_for_vehicle(veh_id)
+
+        # Departure tardiness
+        if skip_level == 4:
+            tardiness_correction += departure_tardiness[v_idx]
+        else:
+            if departure_tardiness[v_idx] > 1e-6:
+                takeoff_res = int(assigned_resources[v_idx, num_operations - 1])
+                y_label = f"R{takeoff_res}"
+                fig.add_trace(go.Bar(
+                    x=[float(departure_tardiness[v_idx])],
+                    y=[y_label],
+                    base=[float(planned_departure_times[v_idx])],
+                    orientation="h",
+                    marker=dict(
+                        color="rgba(214, 39, 40, 0.18)",
+                        line=dict(color=tardiness_color, width=1.0)
+                    ),
+                    name="Departure Tardiness",
+                    showlegend=not dep_tard_legend_shown,
+                    hovertemplate=(
+                        f"<b>Vehicle V{veh_id}</b><br>"
+                        f"Resource: {y_label}<br>"
+                        f"Departure tardiness: {departure_tardiness[v_idx]:.1f} min<br>"
+                        f"Planned dep: {planned_departure_times[v_idx]:.1f}<extra></extra>"
+                    )
+                ))
+                dep_tard_legend_shown = True
+
+        # Arrival tardiness
+        if skip_level is not None and skip_level > 0:
+            tardiness_correction += arrival_tardiness[v_idx]
+        else:
+            if arrival_tardiness[v_idx] > 1e-6:
+                landing_res = int(assigned_resources[v_idx, 0])
+                y_label = f"R{landing_res}"
+                fig.add_trace(go.Bar(
+                    x=[float(arrival_tardiness[v_idx])],
+                    y=[y_label],
+                    base=[float(planned_arrival_times[v_idx])],
+                    orientation="h",
+                    marker=dict(
+                        color="rgba(214, 39, 40, 0.18)",
+                        line=dict(color=tardiness_color, width=1.0)
+                    ),
+                    name="Arrival Tardiness",
+                    showlegend=not arr_tard_legend_shown,
+                    hovertemplate=(
+                        f"<b>Vehicle V{veh_id}</b><br>"
+                        f"Resource: {y_label}<br>"
+                        f"Arrival tardiness: {arrival_tardiness[v_idx]:.1f} min<br>"
+                        f"Planned arr: {planned_arrival_times[v_idx]:.1f}<extra></extra>"
+                    )
+                ))
+                arr_tard_legend_shown = True
+
+    # --- 3. Markers: ETA, NED (gate close), ETD, Ready ---
+    for v_idx, veh_id in enumerate(vehicle_ids):
+        skip_level = get_skip_op_for_vehicle(veh_id)
+
+        landing_res = int(assigned_resources[v_idx, 0])
+        takeoff_res = int(assigned_resources[v_idx, num_operations - 1])
+
+        if is_unified_buffer:
+            if num_buffer > 0:
+                gate_res = int(assigned_resources[v_idx, num_operations - 3])
+            else:
+                gate_res = int(assigned_resources[v_idx, num_operations - 2])
+        else:
+            if num_buffer_out > 0:
+                gate_res = int(assigned_resources[v_idx, num_operations - 3])
+            else:
+                gate_res = int(assigned_resources[v_idx, num_operations - 2])
+
+        y_landing = f"R{landing_res}"
+        y_gate = f"R{gate_res}"
+        y_takeoff = f"R{takeoff_res}"
+
+        # ETD marker
+        if not (skip_level == 4):
+            fig.add_trace(go.Scatter(
+                x=[float(planned_departure_times[v_idx])],
+                y=[y_takeoff],
+                mode="markers+text",
+                marker=dict(color="red", symbol="triangle-up", size=10),
+                text=[f"ETD<br>V{veh_id}"],
+                textposition="top center",
+                name="ETD",
+                showlegend=not etd_legend_shown,
+                hovertemplate=(
+                    f"<b>Vehicle V{veh_id}</b><br>"
+                    f"ETD: {planned_departure_times[v_idx]:.1f}<br>"
+                    f"DT: {departure_tardiness[v_idx]:.1f} min<extra></extra>"
+                )
+            ))
+            etd_legend_shown = True
+
+        # Gate closing (NED)
+        if not (skip_level is not None and skip_level > 2):
+            fig.add_trace(go.Scatter(
+                x=[float(planned_gate_closing_times[v_idx])],
+                y=[y_gate],
+                mode="markers+text",
+                marker=dict(color="green", symbol="x", size=10),
+                text=[f"NED<br>V{veh_id}"],
+                textposition="bottom center",
+                name="Gate Close (NED)",
+                showlegend=not ned_legend_shown,
+                hovertemplate=(
+                    f"<b>Vehicle V{veh_id}</b><br>"
+                    f"Gate close: {planned_gate_closing_times[v_idx]:.1f}<extra></extra>"
+                )
+            ))
+            ned_legend_shown = True
+
+        # ETA marker
+        if not (skip_level is not None and skip_level > 0):
+            fig.add_trace(go.Scatter(
+                x=[float(planned_arrival_times[v_idx])],
+                y=[y_landing],
+                mode="markers+text",
+                marker=dict(color="blue", symbol="triangle-down", size=10),
+                text=[f"ETA<br>V{veh_id}"],
+                textposition="top center",
+                name="ETA",
+                showlegend=not eta_legend_shown,
+                hovertemplate=(
+                    f"<b>Vehicle V{veh_id}</b><br>"
+                    f"ETA: {planned_arrival_times[v_idx]:.1f}<br>"
+                    f"AT: {arrival_tardiness[v_idx]:.1f} min<extra></extra>"
+                )
+            ))
+            eta_legend_shown = True
+
+        # Ready marker
+        if skip_level is None:
+            fig.add_trace(go.Scatter(
+                x=[float(ready[v_idx])],
+                y=[y_landing],
+                mode="markers+text",
+                marker=dict(color="magenta", symbol="circle-open", size=10),
+                text=[f"Ready<br>V{veh_id}"],
+                textposition="bottom center",
+                name="Ready",
+                showlegend=not ready_legend_shown,
+                hovertemplate=(
+                    f"<b>Vehicle V{veh_id}</b><br>"
+                    f"Ready: {ready[v_idx]:.1f}<extra></extra>"
+                )
+            ))
+            ready_legend_shown = True
+
+    # --- 4. Optional current time vertical line (for RHC) ---
+    if current_time is not None:
+        fig.add_vline(
+            x=current_time,
+            line_color="black",
+            line_dash="dash",
+            annotation_text=f"t = {current_time:.1f}",
+            annotation_position="top left"
+        )
+
+    # --- 5. Layout & title ---
+    if solver_type in ["exact", "exact_RHC", "FCFS_SAT", "FCFS_Gurobi", "FCFS_landing_SAT", "FCFS_landing_Gurobi"]:
+        title_str = (
+            f"Resource-Centric Gantt | Obj: {obj_val - tardiness_correction:.2f}, "
+            f"Total AT: {solution.total_arrival_tardiness:.2f} min, Total DT: {solution.total_departure_tardiness:.2f} min, "
+            f"Runtime: {solver_runtime:.2f} s, Sim End: {sim_end_time:.2f} min, "
+            f"Solver: {solver_type}, Obj: {solution.objective_option}<br>"
+            f"Total T: {solution.total_arrival_tardiness + solution.total_departure_tardiness:.2f} min, "
+            f"Avg T: {(solution.total_arrival_tardiness + solution.total_departure_tardiness) / num_vehicles if num_vehicles > 0 else 0:.2f} min, "
+            f"Max AT: {solution.max_arrival_tardiness:.2f} min, Max DT: {solution.max_departure_tardiness:.2f} min, "
+            f"Max Vehicle-wise T: {solution.max_vehicle_wise_tardiness:.2f} min, Num V: {num_vehicles}, "
+            f"W = [{solution.objective_weights[0]:.2f}, {solution.objective_weights[1]:.2f}]"
+        )
+    else:
+        title_str = (
+            f"Resource-Centric Gantt | Obj: {obj_val - tardiness_correction:.2f}, "
+            f"Total AT: {solution.total_arrival_tardiness:.2f} min, Total DT: {solution.total_departure_tardiness:.2f} min, "
+            f"Runtime: {solver_runtime:.2f} s, Sim End: {sim_end_time:.2f} min, Solver: {solver_type}<br>"
+            f"Total T: {solution.total_arrival_tardiness + solution.total_departure_tardiness:.2f} min, "
+            f"Avg T: {(solution.total_arrival_tardiness + solution.total_departure_tardiness) / num_vehicles if num_vehicles > 0 else 0:.2f} min, "
+            f"Max AT: {solution.max_arrival_tardiness:.2f} min, Max DT: {solution.max_departure_tardiness:.2f} min, "
+            f"Max Vehicle-wise T: {solution.max_vehicle_wise_tardiness:.2f} min, Num V: {num_vehicles}, "
+            f"W = [{solution.objective_weights[0]:.2f}, {solution.objective_weights[1]:.2f}]"
+        )
+
+    fig.update_yaxes(
+        title_text="Resource",
+        categoryorder="array",
+        categoryarray=ytick_labels
+    )
+    fig.update_xaxes(title_text="Time (min)")
+
+    fig.update_layout(
+        title=title_str,
+        barmode="overlay",
+        height=800,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1.0
+        ),
+        template="plotly_white"
+    )
+
+    # --- 6. Show or save ---
+    if mode == "show":
+        fig.show()
+    elif mode == "save":
+        out_name = f"{solution.solver_type}_{filename_suffix}.html"
+        fig.write_html(out_name)
+        print(f"Saved interactive Gantt to {out_name}")
 
 
 def visualize_top5_vehicle_wise_delay(solution, vehicle_ids):

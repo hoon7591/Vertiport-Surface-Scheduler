@@ -41,7 +41,7 @@ class ScenarioRHCConfig:
     # for receding horizon control
     scheduling_horizon_length: float = 50.0  # in minutes
     update_interval: float = 1.0  # in minutes
-    std_param_from_update_interval: float = 3.0
+    std_param_from_update_interval: float = 0.1 # adjust ratio of update interval as a std of stochastic bridge
     operation_hour: int = 18
     disturbance_std_proc: List[float] = field(default_factory=lambda: [0.3, 0.5, 0.3])
     disturbance_std_ready: float = 5.0
@@ -258,7 +258,7 @@ class Scenario:
         M = config.operation_hour * 60.0 + (proc_landing.sum() / config.num_pad + proc_gate.sum() / config.num_gate + proc_takeoff.sum() / config.num_pad) / 2
 
         whether_vehicle_dynamic_arrival = np.isin(vehicle_id, config.dynamic_arrival_v_id)
-        vehicle_dynamic_arrival_aware_time = np.full(num_vehicles, np.nan)
+        vehicle_dynamic_arrival_aware_time = np.full(num_vehicles, -1.0)
         for i in range(num_vehicles):
             if whether_vehicle_dynamic_arrival[i]:
                 vehicle_dynamic_arrival_aware_time[i] = max(12.0, np.random.normal(config.dynamic_arrival_aware_time[0], config.dynamic_arrival_aware_time[1]))
@@ -356,15 +356,24 @@ class Scenario:
 
 
     @classmethod
-    def scenario_to_instance_exp(cls, scenario_exp, scenario_true, scheduling_horizon, update_interval,
-                                 processing_vehicles_id, processing_vehicles_op, finish_times_of_processing_vehicles_exp):
+    def scenario_to_instance_exp(cls, scenario_exp, scenario_true, instance_exp_pre, activated_vehicle_id_exp_pre,
+                                 scheduling_horizon, update_interval, processing_vehicles_id, processing_vehicles_op,
+                                 remaining_proc_time):
 
-        ready_in_horizon_vehicle_id_exp = [i for i, x in enumerate(scenario_exp.vehicle_arrival_times) if
+        dynamic_vehicle_arrival_times = copy.deepcopy(scenario_exp.vehicle_arrival_times)
+        for i in range(len(activated_vehicle_id_exp_pre)):
+            if dynamic_vehicle_arrival_times[activated_vehicle_id_exp_pre[i]] != instance_exp_pre.vehicle_arrival_times[i]:
+                if instance_exp_pre.vehicle_arrival_times[i] <= scheduling_horizon[0]:
+                    pass
+                else:
+                    dynamic_vehicle_arrival_times[activated_vehicle_id_exp_pre[i]] = instance_exp_pre.vehicle_arrival_times[i]
+
+        ready_in_horizon_vehicle_id_exp = [i for i, x in enumerate(dynamic_vehicle_arrival_times) if
                                            scheduling_horizon[0] <= x <= scheduling_horizon[1] *
                                            (1.0 - scenario_exp.whether_vehicle_dynamic_arrival[i]) + (scheduling_horizon[0] +
                                            scenario_exp.vehicle_dynamic_arrival_aware_time[i]) * scenario_exp.whether_vehicle_dynamic_arrival[i]]
 
-        newly_ready_in_horizon_vehicle_id_exp = [i for i, x in enumerate(scenario_exp.vehicle_arrival_times) if
+        newly_ready_in_horizon_vehicle_id_exp = [i for i, x in enumerate(dynamic_vehicle_arrival_times) if
                                                  scheduling_horizon[1] * (1.0 - scenario_exp.whether_vehicle_dynamic_arrival[i]) +
                                                  (scheduling_horizon[0] + scenario_exp.vehicle_dynamic_arrival_aware_time[i]) *
                                                  scenario_exp.whether_vehicle_dynamic_arrival[i] - update_interval <= x <= scheduling_horizon[1] *
@@ -383,7 +392,7 @@ class Scenario:
                 for k in range(len(proc_in_horizon[j][i])):
                     if j == processing_vehicles_op[i]:
                         if proc_in_horizon[j][i][k] > 0:
-                            proc_in_horizon[j][i][k] = finish_times_of_processing_vehicles_exp[i] - scheduling_horizon[0]
+                            proc_in_horizon[j][i][k] = remaining_proc_time[i]
                     else:
                         proc_in_horizon[j][i][k] = 0.0
 
@@ -395,11 +404,15 @@ class Scenario:
 
         for i in range(len(processing_vehicles_id), len(activated_vehicle_id_exp)):
             if activated_vehicle_id_exp[i] not in newly_ready_in_horizon_vehicle_id_exp:
-                ready_in_horizon_exp[i] = ready_in_horizon_exp[i] + scheduling_horizon[0] * (ready_in_horizon_true[i] - ready_in_horizon_exp[i]) \
-                                          / (ready_in_horizon_true[i] - scenario_exp.first_activated_time_of_ready[activated_vehicle_id_exp[i]]) \
-                                          + np.random.normal(0, update_interval * scenario_exp.std_param_from_update_interval
-                                                             * (ready_in_horizon_true[i] - scheduling_horizon[0])
-                                                             / (ready_in_horizon_true[i] - scenario_exp.first_activated_time_of_ready[activated_vehicle_id_exp[i]]))
+                sigma_for_stochastic_bridge = update_interval * scenario_exp.std_param_from_update_interval\
+                                              * (ready_in_horizon_true[i] - scheduling_horizon[0])\
+                                              / (ready_in_horizon_true[i] - scenario_exp.first_activated_time_of_ready[activated_vehicle_id_exp[i]])
+                if sigma_for_stochastic_bridge >= 0.0:
+                    ready_in_horizon_exp[i] = ready_in_horizon_exp[i] + scheduling_horizon[0] * (ready_in_horizon_true[i] - ready_in_horizon_exp[i]) \
+                                              / (ready_in_horizon_true[i] - scenario_exp.first_activated_time_of_ready[activated_vehicle_id_exp[i]]) \
+                                              + np.random.normal(0, update_interval * scenario_exp.std_param_from_update_interval
+                                                                 * (ready_in_horizon_true[i] - scheduling_horizon[0])
+                                                                 / (ready_in_horizon_true[i] - scenario_exp.first_activated_time_of_ready[activated_vehicle_id_exp[i]]))
             else:
                 if scheduling_horizon[0] == 0.0 and ready_in_horizon_exp[i] < scheduling_horizon[1] - update_interval:
                     scenario_exp.first_activated_time_of_ready[activated_vehicle_id_exp[i]] = ready_in_horizon_exp[i] - scheduling_horizon[1]

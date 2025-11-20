@@ -676,13 +676,15 @@ class RunRHC(RunStrategyRHC):
                                 if simulator.current_time >= planned_operation_start_times[vehicle_original_id[vehicle.id], operation]:
 
                                     # a = 0
-                                    # if resource.state == ResourceState.SEPARATION_DELAY and (event.event_type == EventType.RESOURCE_AVAILABLE or event.event_type == EventType.VEHICLE_ARRIVAL or event.event_type == EventType.OPERATION_COMPLETE) and resource.id == event.resource_id:
-                                    #     for k in range(len(event.data['vehicle_operation_pairs'])):
-                                    #         if vehicle.id == event.data['vehicle_operation_pairs'][k][
-                                    #             'vehicle_id'] and operation == event.data['vehicle_operation_pairs'][k]['operation']:
-                                    #             resource.state = ResourceState.IDLE
-                                    #             a = 1
-                                    #             break
+                                    # # if resource.state == ResourceState.SEPARATION_DELAY and (event.event_type == EventType.RESOURCE_AVAILABLE or event.event_type == EventType.VEHICLE_ARRIVAL or event.event_type == EventType.OPERATION_COMPLETE) and resource.id == event.resource_id:
+                                    # if resource.state == ResourceState.SEPARATION_DELAY and event.event_type == EventType.RESOURCE_AVAILABLE and resource.id == event.resource_id:
+                                    #     if event.data != {}:
+                                    #         for k in range(len(event.data['vehicle_operation_pairs'])):
+                                    #             if vehicle.id == event.data['vehicle_operation_pairs'][k][
+                                    #                 'vehicle_id'] and operation == event.data['vehicle_operation_pairs'][k]['operation']:
+                                    #                 resource.state = ResourceState.IDLE
+                                    #                 a = 1
+                                    #                 break
 
                                     if simulator.can_assign_vehicle_to_resource(vehicle.id, resource.id, operation):
                                         simulator.assign_vehicle_to_resource_now(vehicle.id, resource.id, operation)
@@ -702,7 +704,7 @@ class RunRHC(RunStrategyRHC):
                                 else:
                                     if operation == 0 and event.event_type == EventType.VEHICLE_ARRIVAL:
                                         arrival_event = Event(time=planned_operation_start_times[vehicle_original_id[vehicle.id], operation],
-                                                              event_type=EventType.RESOURCE_AVAILABLE,
+                                                              event_type=EventType.VEHICLE_ARRIVAL,
                                                               vehicle_id=vehicle.id,
                                                               resource_id=resource.id,
                                                               operation_id=operation,
@@ -734,6 +736,209 @@ class RunRHC(RunStrategyRHC):
         return simulator._generate_solution(runtime, is_deadlock, is_runtime_over, solver_type="run_RHC")
 
 
+class RunRHC2(RunStrategyRHC):
+    def solve(self, instance: Instance, is_numerical_exp: bool, planned_resource_assignment: np.ndarray,
+              planned_operation_start_times: np.ndarray, vehicle_original_id: List[int]) -> Solution:
+
+        # Create simulator
+        simulator = VertiportSimulatorRecedingHorizon(instance, is_numerical_exp)
+        is_deadlock = False
+        is_runtime_over = False
+
+        # Step-by-step control with RunRHC logic
+        solve_start_time = time.time()
+        while not simulator.is_simulation_complete():
+            event = simulator.step_to_next_event()
+
+            # RunRHC logic here - TODO : improve more - multiple vehicles and multiple resources
+            for operation in range(instance.num_operations):
+                waiting_vehicles = simulator.get_waiting_vehicles(operation)
+                available_resources = simulator.get_available_resources(operation)
+
+                # Make assignment decisions
+                if waiting_vehicles and available_resources:
+                    break_flag = False
+                    for i in range(len(waiting_vehicles)):
+                        for j in range(len(available_resources)):
+                            vehicle = waiting_vehicles[i]  # selection logic
+                            resource = available_resources[j]  # selection logic
+
+                            if resource.id == planned_resource_assignment[vehicle_original_id[vehicle.id], operation]:
+                                if simulator.current_time >= planned_operation_start_times[vehicle_original_id[vehicle.id], operation]:
+
+                                    # Error fixing of separation time reflection; only the worst case separation is considered before
+                                    a = 0
+                                    if resource.state == ResourceState.SEPARATION_DELAY and event.event_type == EventType.RESOURCE_AVAILABLE and resource.id == event.resource_id:
+                                        for k in range(len(event.data['vehicle_operation_pairs'])):
+                                            if vehicle.id == event.data['vehicle_operation_pairs'][k]['vehicle_id'] and operation == event.data['vehicle_operation_pairs'][k]['operation']:
+                                                resource.state = ResourceState.IDLE
+                                                a = 1
+                                                break
+
+                                    if simulator.can_assign_vehicle_to_resource(vehicle.id, resource.id, operation):
+                                        simulator.assign_vehicle_to_resource_now(vehicle.id, resource.id, operation)
+                                        break_flag = True
+                                        break
+                                    elif a:
+                                        resource.state = ResourceState.SEPARATION_DELAY
+
+                                else:
+                                    replace_event = Event(time=planned_operation_start_times[vehicle_original_id[vehicle.id], operation],
+                                                          event_type=EventType.RESOURCE_AVAILABLE,
+                                                          vehicle_id=vehicle.id,
+                                                          resource_id=resource.id,
+                                                          operation_id=operation,
+                                                          event_id=event.event_id)
+                                    heapq.heappush(simulator.event_queue, replace_event)
+                                    if event.event_type == EventType.VEHICLE_ARRIVAL:
+                                        vehicle.state = VehicleState.WAITING_FOR_LANDING
+                                    elif event.event_type == EventType.OPERATION_COMPLETE or event.event_type == EventType.RESOURCE_AVAILABLE:
+                                        inverse_mapping = defaultdict(list)
+                                        for k, v in VehicleStateToOperation.mapping.items():
+                                            inverse_mapping[v].append(k)
+                                        vehicle.state = inverse_mapping[operation][0]
+
+            if event is None and simulator.is_simulation_complete() is False and is_numerical_exp:
+                is_deadlock = True
+                break
+
+        solve_end_time = time.time()
+        runtime = solve_end_time - solve_start_time
+
+        return simulator._generate_solution(runtime, is_deadlock, is_runtime_over, solver_type="run_RHC2")
+
+
+class RunRHC3(RunStrategyRHC):
+    def solve(self, instance: Instance, is_numerical_exp: bool, planned_resource_assignment: np.ndarray,
+              planned_operation_start_times: np.ndarray, vehicle_original_id: List[int]) -> Solution:
+
+        # Create simulator
+        simulator = VertiportSimulatorRecedingHorizon(instance, is_numerical_exp)
+        is_deadlock = False
+        is_runtime_over = False
+
+        # Step-by-step control with RunRHC logic
+        solve_start_time = time.time()
+        while not simulator.is_simulation_complete():
+            event = simulator.step_to_next_event()
+
+            # RunRHC logic here - TODO : improve more - multiple vehicles and multiple resources
+            for operation in range(instance.num_operations):
+                waiting_vehicles = simulator.get_waiting_vehicles(operation)
+                available_resources = simulator.get_available_resources(operation)
+
+                # Make assignment decisions
+                if waiting_vehicles and available_resources:
+                    break_flag = False
+                    for i in range(len(waiting_vehicles)):
+                        for j in range(len(available_resources)):
+                            vehicle = waiting_vehicles[i]  # selection logic
+                            resource = available_resources[j]  # selection logic
+                            if resource.id == planned_resource_assignment[vehicle_original_id[vehicle.id], operation]\
+                                    or (operation in [1, 3] and planned_operation_start_times[vehicle_original_id[vehicle.id], operation + 1]
+                                        == planned_operation_start_times[vehicle_original_id[vehicle.id], operation]):
+                                if simulator.current_time >= planned_operation_start_times[vehicle_original_id[vehicle.id], operation]:
+
+                                    a = 0
+                                    # if resource.state == ResourceState.SEPARATION_DELAY and (event.event_type == EventType.RESOURCE_AVAILABLE or event.event_type == EventType.VEHICLE_ARRIVAL or event.event_type == EventType.OPERATION_COMPLETE) and resource.id == event.resource_id:
+                                    if resource.state == ResourceState.SEPARATION_DELAY and event.event_type == EventType.RESOURCE_AVAILABLE and resource.id == event.resource_id:
+                                        for k in range(len(event.data['vehicle_operation_pairs'])):
+                                            if vehicle.id == event.data['vehicle_operation_pairs'][k][
+                                                'vehicle_id'] and operation == event.data['vehicle_operation_pairs'][k]['operation']:
+                                                resource.state = ResourceState.IDLE
+                                                a = 1
+                                                break
+
+                                    if simulator.can_assign_vehicle_to_resource(vehicle.id, resource.id, operation):
+                                        simulator.assign_vehicle_to_resource_now(vehicle.id, resource.id, operation)
+                                        break_flag = True
+                                        break
+                                    elif a:
+                                        resource.state = ResourceState.SEPARATION_DELAY
+                                    # elif (event.event_type == EventType.RESOURCE_AVAILABLE or event.event_type == EventType.VEHICLE_ARRIVAL or event.event_type == EventType.OPERATION_COMPLETE) and resource.state == ResourceState.SEPARATION_DELAY:
+                                    #     separation_clear_event = Event(time=simulator.current_time,
+                                    #                                    event_type=EventType.RESOURCE_AVAILABLE,
+                                    #                                    vehicle_id=vehicle.id,
+                                    #                                    resource_id=resource.id,
+                                    #                                    operation_id=operation,
+                                    #                                    event_id=event.event_id)
+                                    #     heapq.heappush(simulator.event_queue, separation_clear_event)
+                                    #     resource.state = ResourceState.IDLE
+                                else:
+                                    if operation == 0 and event.event_type == EventType.VEHICLE_ARRIVAL:
+                                        list_of_separation_time = simulator._calculate_list_of_separation_time(resource, operation, vehicle)
+                                        for separation_info in list_of_separation_time:
+                                            simulator.logger.debug(
+                                                "Scheduled resource available event due to separation time required for resource %d at time %.2f: %s",
+                                                resource.id, simulator.current_time, separation_info)
+                                            event_id = simulator._get_next_event_id()
+                                            arrival_event = Event(time=planned_operation_start_times[vehicle_original_id[vehicle.id], operation],
+                                                                  event_type=EventType.RESOURCE_AVAILABLE,
+                                                                  vehicle_id=vehicle.id,
+                                                                  resource_id=resource.id,
+                                                                  operation_id=operation,
+                                                                  event_id=event_id,
+                                                                  data={
+                                                                      'event_subtype': 'separation_update',
+                                                                      'separation_time': separation_info[
+                                                                          'separation_time'],
+                                                                      'vehicle_operation_pairs': separation_info.get(
+                                                                          'vehicle_operation_pairs', [])
+                                                                  }
+                                                            )
+                                            heapq.heappush(simulator.event_queue, arrival_event)
+                                            resource.separation_time_reached_events.append(
+                                                event_id)  # Store event ID, not the event object
+                                            # Update resource allocation prohibited vehicles
+                                            resource.allocation_prohibited_vehicle_n_operation.extend(
+                                                separation_info.get('vehicle_operation_pairs', [])
+                                            )
+                                        vehicle.state = VehicleState.WAITING_FOR_LANDING
+                                    elif event.event_type == EventType.OPERATION_COMPLETE:
+                                        list_of_separation_time = simulator._calculate_list_of_separation_time(resource, operation, vehicle)
+                                        for separation_info in list_of_separation_time:
+                                            simulator.logger.debug(
+                                                "Scheduled resource available event due to separation time required for resource %d at time %.2f: %s",
+                                                resource.id, simulator.current_time, separation_info)
+                                            event_id = simulator._get_next_event_id()
+                                            completion_event = Event(time=planned_operation_start_times[vehicle_original_id[vehicle.id], operation],
+                                                                     event_type=EventType.RESOURCE_AVAILABLE,
+                                                                     vehicle_id=vehicle.id,
+                                                                     resource_id=resource.id,
+                                                                     operation_id=operation,
+                                                                     event_id=event_id,
+                                                                     data={
+                                                                         'event_subtype': 'separation_update',
+                                                                         'separation_time': separation_info[
+                                                                             'separation_time'],
+                                                                         'vehicle_operation_pairs': separation_info.get(
+                                                                             'vehicle_operation_pairs', [])
+                                                                     }
+                                                                )
+                                            heapq.heappush(simulator.event_queue, completion_event)
+                                            resource.separation_time_reached_events.append(
+                                                event_id)  # Store event ID, not the event object
+                                            # Update resource allocation prohibited vehicles
+                                            resource.allocation_prohibited_vehicle_n_operation.extend(
+                                                separation_info.get('vehicle_operation_pairs', [])
+                                            )
+                                        inverse_mapping = defaultdict(list)
+                                        for k, v in VehicleStateToOperation.mapping.items():
+                                            inverse_mapping[v].append(k)
+                                        vehicle.state = inverse_mapping[operation][0]
+                        if break_flag:
+                            break
+
+            if event is None and simulator.is_simulation_complete() is False and is_numerical_exp:
+                is_deadlock = True
+                break
+
+        solve_end_time = time.time()
+        runtime = solve_end_time - solve_start_time
+
+        return simulator._generate_solution(runtime, is_deadlock, is_runtime_over, solver_type="run_RHC3")
+
+
 # Solver factory with minimal overhead
 _SOLVER_INSTANCES = {
     "exact": ExactSolver(),
@@ -745,6 +950,8 @@ _SOLVER_INSTANCES = {
     "FCFS_heuristic": FCFS_HeuristicSolver(),
     "exact_RHC": ExactSolverRHC(),
     "run_RHC": RunRHC(),
+    "run_RHC2": RunRHC2(),
+    "run_RHC3": RunRHC3(),
 }
 
 

@@ -819,7 +819,9 @@ class VertiportSimulator:
             return
             
         resource = self.resources[event.resource_id]
-        
+        # if event.vehicle_id != -1:
+        #     vehicle = self.vehicles[event.vehicle_id]
+
         # Check if this is a partial separation update or full availability
         is_separation_update = (event.data and 
                                event.data.get('event_subtype') == 'separation_update')
@@ -846,10 +848,30 @@ class VertiportSimulator:
                 resource.allocation_prohibited_vehicle_n_operation.clear()
         else:
             # Handle full resource availability (traditional behavior)
+            if resource.state == ResourceState.PROCESSING:
+                return
             resource.state = ResourceState.IDLE
             resource.allocation_prohibited_vehicle_n_operation.clear() 
             self.logger.debug("Resource %d became IDLE at time %.2f", 
                              resource.id, self.current_time)
+
+            # if len(resource.allocation_prohibited_vehicle_n_operation) > 0:
+            #     finish = resource.log_operation_finish_times[-1]
+            #     pre_v = resource.previous_vehicle_operation[0]
+            #     pre_op = resource.previous_vehicle_operation[1]
+            #     v = event.vehicle_id
+            #     op = event.operation_id
+            #     r = event.resource_id
+            #
+            #     available_time = finish + self.instance.ST[(op, pre_op)][pre_v][v][r]
+            #     if available_time >= event.time:
+            #         return
+            # if resource.state == ResourceState.PROCESSING:
+            #     return
+            # resource.state = ResourceState.IDLE     # Problematic for RHC
+            # resource.allocation_prohibited_vehicle_n_operation.clear()
+            # self.logger.debug("Resource %d became IDLE at time %.2f",
+            #                   resource.id, self.current_time)
         
         # Note: Resource assignment is handled externally
     
@@ -931,7 +953,10 @@ class VertiportSimulator:
         resource_idx = resource.id
         
         # Get operation completion time
-        operation_complete_time = resource.log_operation_finish_times[-1]
+        if len(resource.log_operation_finish_times) == 0:
+            return []
+        else:
+            operation_complete_time = resource.log_operation_finish_times[-1]
         
         # Determine candidate vehicles if not provided
         if candidate_vehicles is None:
@@ -1197,7 +1222,8 @@ class VertiportSimulatorRecedingHorizon(VertiportSimulator):
 
         for res_id in range(start_idx, end_idx):
             resource = self.resources[res_id]
-            if resource.state == ResourceState.IDLE or resource.state == ResourceState.SEPARATION_DELAY or resource.state == ResourceState.OCCUPIED:
+            # if resource.state == ResourceState.IDLE or resource.state == ResourceState.SEPARATION_DELAY or resource.state == ResourceState.OCCUPIED:      # for RHC & RHC3
+            if resource.state == ResourceState.IDLE or resource.state == ResourceState.SEPARATION_DELAY:        # for RHC2
                 available.append(resource)
 
         return available

@@ -1,54 +1,100 @@
-import numpy as np
-from Scenario import ScenarioConfig, Scenario
-from Instance import Instance
+import copy
+
+from Scenario import ScenarioRHCConfig, Scenario
 from Solver import solve
 from Solution import Solution
-from VertiportSimulator import VertiportSimulator, VertiportSimulatorRecedingHorizon
+from Instance import Instance
+from Visualizer import visualize_gantt, visualize_gantt_plotly, visualize_top5_vehicle_wise_delay
+from typing import Any, List
+from dataclasses import dataclass, field
+import numpy as np
 
 
-def initialize_results_data(scenario_exp):
-    start_times_RHC = np.zeros(scenario_exp.num_vehicles, scenario_exp.num_operations)
-    finish_times_RHC = np.zeros(scenario_exp.num_vehicles, scenario_exp.num_operations)
-    assigned_resources_RHC = np.zeros((scenario_exp.num_vehicles, scenario_exp.num_operations), dtype=int) - 1
-    arrival_time_tardiness_RHC = np.zeros(scenario_exp.num_vehicles)
-    departure_time_tardiness_RHC = np.zeros(scenario_exp.num_vehicles)
+def RHC(scenario_RHC_config, scenario_exp, scenario_true) -> Solution:
+    current_time = 0.0
+    scheduling_horizon = [current_time, current_time + scenario_RHC_config.scheduling_horizon_length]
+    update_interval = scenario_RHC_config.update_interval
 
-    return start_times_RHC, finish_times_RHC, assigned_resources_RHC, arrival_time_tardiness_RHC, departure_time_tardiness_RHC
+    all_assigned_resources_schedule = np.zeros((scenario_exp.num_vehicles, scenario_exp.num_operations), dtype=int) - 1
+    all_start_times_schedule = np.zeros((scenario_exp.num_vehicles, scenario_exp.num_operations)) - 1.0
+    all_assigned_resources_run = np.zeros((scenario_exp.num_vehicles, scenario_exp.num_operations), dtype=int) - 1
+    all_start_times_run = np.zeros((scenario_exp.num_vehicles, scenario_exp.num_operations)) - 1.0
 
+    processing_vehicles_id = []
+    processing_vehicles_op = []
+    processing_vehicles_res = []
+    remaining_proc_time = []
 
-def horizon_scheduling(scenario_exp, planning_horizon, processing_vehicles_id):
-    instance_in_horizon_exp, activated_vehicle_id_exp, ready_in_horizon_vehicle_id_exp = Scenario.scenario_to_instance(scenario_exp, planning_horizon, processing_vehicles_id)
-    solution_in_horizon = solve(instance_in_horizon_exp, solver="exact", is_numerical_exp=False)
-    schedule_info_for_run = {}
-    for i in range(len(activated_vehicle_id_exp)):
-        v_id = activated_vehicle_id_exp[i]
-        for j in range(scenario_exp.num_operations):
-            schedule_info_for_run[(v_id, j)] = (
-                solution_in_horizon.assigned_resources[i, j],
-                solution_in_horizon.start_times[i, j]
-            )
+    instance_from_scenario_exp = None
+    activated_vehicle_id_exp = []
 
-    return schedule_info_for_run, instance_in_horizon_exp, activated_vehicle_id_exp, ready_in_horizon_vehicle_id_exp
+    while True:
+        print(f'\nCurrent Time: {current_time}\n')
 
+        instance_from_scenario_exp, activated_vehicle_id_exp, ready_in_horizon_vehicle_id_exp = Scenario.scenario_to_instance_exp(
+            scenario_exp, scenario_true, instance_from_scenario_exp, activated_vehicle_id_exp, scheduling_horizon,
+            update_interval, processing_vehicles_id, processing_vehicles_op, remaining_proc_time
+        )
+        solution_schedule = solve(instance_from_scenario_exp, solver="exact_RHC", is_numerical_exp=False,
+                                      processing_vehicles_op=processing_vehicles_op, processing_vehicles_res=processing_vehicles_res,
+                                      horizon_start=current_time, obj_option="weighted_sum")
 
-# def horizon_running(scenario_true, schedule_info_for_run, running_horizon, available_time_of_resources, past_pad_info, finish_times_RHC):
-#     ready_in_horizon_vehicle_id_true = [[i, 0] for i, x in enumerate(scenario_true.vehicle_arrival_times) if
-#                                         running_horizon[0] <= x <= running_horizon[1]]
-#     ready_val_in_horizon_true = [scenario_true.vehicle_arrival_times[i] for i in ready_in_horizon_vehicle_id_true]
-#
-#     mask = (running_horizon[0] <= finish_times_RHC) & (finish_times_RHC <= running_horizon[1])
-#     finish_in_horizon_vehicle_id_op_pair_true = np.argwhere(mask).tolist()
-#     finish_val_in_horizon_true = finish_times_RHC[mask].tolist()
-#
-#     runnable_vehicles_info = {}
-#     for i in range(len(ready_in_horizon_vehicle_id_true)):
-#         runnable_vehicles_info[(ready_in_horizon_vehicle_id_true[i][0],
-#                                 ready_in_horizon_vehicle_id_true[i][1])] = ready_val_in_horizon_true[i]
-#     for i in range(len(finish_in_horizon_vehicle_id_op_pair_true)):
-#         finish_in_horizon_vehicle_id_op_pair_true[i][1] += 1
-#         runnable_vehicles_info[(finish_in_horizon_vehicle_id_op_pair_true[i][0],
-#                                 finish_in_horizon_vehicle_id_op_pair_true[i][1])] = finish_val_in_horizon_true[i]
-#     runnable_vehicles_info_sorted = dict(sorted(runnable_vehicles_info.items(), key=lambda item: item[1]))
-#
-#     while not all(value > running_horizon[1] for value in runnable_vehicles_info_sorted.values()):
+        visualize_gantt(solution_schedule, activated_vehicle_id_exp, processing_vehicles_id, processing_vehicles_op, current_time, 'save')
+        visualize_gantt_plotly(solution_schedule, activated_vehicle_id_exp, processing_vehicles_id, processing_vehicles_op, current_time, 'save')
 
+        for i in range(len(activated_vehicle_id_exp)):
+            for j in range(scenario_exp.num_operations):
+                all_start_times_schedule[activated_vehicle_id_exp[i], j] = solution_schedule.start_times[i, j]
+                all_assigned_resources_schedule[activated_vehicle_id_exp[i], j] = solution_schedule.assigned_resources[i, j]
+
+        all_start_times_run = copy.deepcopy(all_start_times_schedule)
+        all_assigned_resources_run = copy.deepcopy(all_assigned_resources_schedule)
+        if 'activated_vehicle_id_true' in locals() or 'activated_vehicle_id_true' in globals():
+            for i in range(len(activated_vehicle_id_true)):
+                for j in range(scenario_true.num_operations):
+                    if solution_run.start_times[i, j] <= current_time:
+                        all_start_times_run[activated_vehicle_id_true[i], j] = solution_run.start_times[i, j]
+                        all_assigned_resources_run[activated_vehicle_id_true[i], j] = solution_run.assigned_resources[i, j]
+
+        instance_from_scenario_true, activated_vehicle_id_true = Scenario.scenario_to_instance_true(scenario_true, current_time + update_interval)
+        if len(activated_vehicle_id_true) == 0:
+            current_time += update_interval
+            scheduling_horizon = [current_time, current_time + scenario_RHC_config.scheduling_horizon_length]
+            continue
+        solution_run = solve(instance_from_scenario_true, solver="run_RHC2", is_numerical_exp=True,
+                             planned_resource_assignment=all_assigned_resources_run,
+                             planned_operation_start_times=all_start_times_run,
+                             vehicle_original_id=activated_vehicle_id_true)
+
+        remaining_proc_time = []
+
+        snapshot = solution_run.snapshot_at_time(current_time + update_interval)
+        processing_vehicles_id = snapshot['processing_vehicles_ids']
+        processing_vehicles_op = snapshot['processing_operation_ids']
+        processing_vehicles_res = snapshot['processing_resource_ids']
+        waiting_next_op_vehicles_id = snapshot['waiting_next_op_vehicles_ids']
+        waiting_landing_vehicles_id = snapshot['waiting_landing_vehicles_ids']
+
+        for i in range(len(processing_vehicles_id)):
+            if processing_vehicles_id[i] not in waiting_next_op_vehicles_id:
+                remaining_proc_time.append(scenario_exp.proc[processing_vehicles_op[i]][activated_vehicle_id_true[processing_vehicles_id[i]]]
+                                           [processing_vehicles_res[i] - solution_run.resource_ind[processing_vehicles_op[i]][0]]
+                                           - (current_time + update_interval - solution_run.start_times[processing_vehicles_id[i], processing_vehicles_op[i]]))
+            else:
+                remaining_proc_time.append(0.0)
+            processing_vehicles_id[i] = activated_vehicle_id_true[processing_vehicles_id[i]]
+
+        visualize_gantt(solution_run, activated_vehicle_id_true, [], [], current_time, 'save')
+        visualize_gantt_plotly(solution_run, activated_vehicle_id_true, [], [], current_time, 'save')
+
+        for i in waiting_landing_vehicles_id:
+            scenario_exp.vehicle_arrival_times[activated_vehicle_id_true[i]] = current_time + update_interval
+
+        current_time += update_interval
+        scheduling_horizon = [current_time, current_time + scenario_RHC_config.scheduling_horizon_length]
+
+        if len(snapshot['takeoff_finished_vehicles_by_t']) == scenario_exp.num_vehicles:
+            final_solution = solution_run
+            break
+
+    return final_solution

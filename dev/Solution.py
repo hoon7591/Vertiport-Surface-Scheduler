@@ -1,5 +1,5 @@
 import numpy as np
-from typing import List, Dict, Optional
+from typing import Dict, List, Any, Optional
 from Instance import Instance  # Ensure Instance is imported from its module
 
 class Solution:
@@ -179,3 +179,199 @@ class Solution:
         #     stats['max_resource_utilization'] = np.max(list(self.resource_utilization.values()))
             
         return stats
+
+    def snapshot_at_time(
+        self,
+        t: float,
+        tol: float = 1e-9,
+        return_1_based_vehicle_ids: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Create a status snapshot at time `t`.
+
+        Returns a dictionary with:
+          - processing_vehicles: list of dicts (vehicles either actively processing or waiting),
+                each item has:
+                {
+                  'vehicle': int,
+                  'operation': int,          # op index
+                  'resource': Optional[int], # resource index (if assigned)
+                  'state': 'active' | 'waiting',
+                  'start': Optional[float],  # op start (for active)
+                  'finish': Optional[float], # op finish (for active)
+                  'wait_type': Optional[str],# 'pre_first_operation' | 'between_operations' (for waiting)
+                  'waiting_since': Optional[float],
+                  'next_start': Optional[float]
+                }
+          - waiting_vehicles: subset of processing_vehicles with state == 'waiting'
+          - counts: {
+                'active': int,
+                'waiting': int,
+                'processing_total': int,
+                'takeoff_finished_by_t': int,
+                'takeoff_finishing_at_t_exact': int
+            }
+          - takeoff_finished_vehicles_by_t: List[int]
+          - takeoff_finishing_at_t_exact: List[int]
+        Notes
+        -----
+        • A vehicle is 'active' on operation o at t if start_times[v, o] <= t < adjusted_finish[v, o].
+          The adjusted finish uses `get_operation_finish_time` so buffer operations extend until
+          the next operation's start (consistent with your modeling).  # :contentReference[oaicite:1]{index=1}
+        • 'waiting' means either:
+            (a) the vehicle is ready (arrival <= t) but op 0 hasn't started by t, or
+            (b) some op o finished by t, but op o+1 hasn't started by t.
+          These are *reclassified* from processing-like into 'waiting'.
+        • 'waiting_vehicles' is a strict subset of 'processing_vehicles'.
+        """
+
+        V = int(self.num_vehicles)
+        O = int(self.num_operations)
+
+        # Build buffer-aware finish matrix
+        adjusted_finish = np.empty_like(self.finish_times, dtype=float)
+        for v in range(V):
+            for o in range(O):
+                adjusted_finish[v, o] = self.get_operation_finish_time(v, o)  # buffer-aware  # :contentReference[oaicite:2]{index=2}
+
+        start = self.start_times
+        assigned = self.assigned_resources
+
+        # --- 1) ACTUAL IN-SERVICE (active) ------------------------------------
+        # We treat "active at t" as start <= t < finish (strictly before finish).
+        in_service = (start <= (t + tol)) & (t < (adjusted_finish - tol))
+
+        def _safe_int(x) -> Optional[int]:
+            try:
+                # Handle NaN or invalid resource entries gracefully
+                if x is None:
+                    return None
+                if isinstance(x, (float, np.floating)) and np.isnan(x):
+                    return None
+                return int(x)
+            except Exception:
+                return None
+
+        processing_vehicles: List[Dict[str, Any]] = []
+
+        # Add active entries (may be 0, 1, or more per vehicle depending on data)
+        active_vehicle_indices, active_op_indices = np.where(in_service)
+        for v, o in zip(active_vehicle_indices, active_op_indices):
+            res = _safe_int(assigned[v, o])
+            item = {
+                'vehicle': (v + 1) if return_1_based_vehicle_ids else v,
+                'operation': int(o),
+                'resource': res,
+                'state': 'active',
+                'start': float(start[v, o]),
+                'finish': float(adjusted_finish[v, o]),
+                'wait_type': None,
+                'waiting_since': None,
+                'next_start': None,
+            }
+            processing_vehicles.append(item)
+
+        # --- 2) WAITING CLASSIFICATION ----------------------------------------
+        # Waiting pre-first-op: ready (arrival) <= t but op 0 hasn't started by t
+        arrival = getattr(self, 'ready', None)  # instance.vehicle_arrival_times  # :contentReference[oaicite:3]{index=3}
+        waiting_pre_first = np.zeros(V, dtype=bool)
+        if arrival is not None:
+            arrival = np.asarray(arrival).reshape(-1)
+            if arrival.shape[0] == V:
+                waiting_pre_first = (arrival <= (t + tol)) & (start[:, 0] > (t + tol))
+
+        # Waiting between ops: finish(o) <= t but start(o+1) > t
+        waiting_next_op_index = np.full(V, -1, dtype=int)  # -1 => not waiting
+        # Pre-first waiting takes precedence
+        waiting_next_op_index[waiting_pre_first] = 0
+
+        for o in range(O - 1):
+            mask_o = (adjusted_finish[:, o] <= (t + tol)) & (start[:, o + 1] > (t + tol))
+            # If we already assigned pre-first, keep it; otherwise assign the first gap found
+            newly_waiting = mask_o & (waiting_next_op_index == -1)
+            waiting_next_op_index[newly_waiting] = o + 1
+
+        # Build waiting entries (subset of processing-like)
+        for v in range(V):
+            next_op = waiting_next_op_index[v]
+            if next_op == -1:
+                continue  # not waiting
+
+            res_next = _safe_int(assigned[v, next_op])
+            if next_op > 0:
+                res_present = _safe_int(assigned[v, next_op - 1])
+                res = res_present
+            else:
+                res = res_next
+            pre_first = (next_op == 0) and waiting_pre_first[v]
+            waiting_since = float(arrival[v]) if pre_first else float(adjusted_finish[v, next_op - 1])
+            item = {
+                'vehicle': (v + 1) if return_1_based_vehicle_ids else v,
+                'operation': int(next_op - 1),             # the operation they are waiting to start
+                'resource': res,                  # the resource assigned for that next op (if any)
+                'state': 'waiting',
+                'wait_type': 'pre_first_operation' if pre_first else 'between_operations',
+                'waiting_since': waiting_since,
+                'next_start': float(start[v, next_op]),
+                'start': None,
+                'finish': None,
+            }
+            processing_vehicles.append(item)
+
+        # Extract strict waiting subset for convenience
+        waiting_vehicles = [x for x in processing_vehicles if x['state'] == 'waiting']
+        waiting_next_op_vehicles = [x for x in waiting_vehicles if x.get('wait_type') == 'between_operations']
+        waiting_landing_vehicles = [x for x in waiting_vehicles if x.get('wait_type') == 'pre_first_operation']
+
+        # Remove landing-waiting vehicles from processing list
+        processing_vehicles = [
+            p for p in processing_vehicles
+            if p.get('wait_type') != 'pre_first_operation'
+        ]
+
+        # Extract operation and resource ids for processing vehicles
+        processing_vehicles_id = [v['vehicle'] for v in processing_vehicles]
+        processing_vehicles_operation = [v['operation'] for v in processing_vehicles]
+        processing_vehicles_resource = [v['resource'] for v in processing_vehicles]
+
+        # Extract operation and resource ids for waiting vehicles
+        waiting_next_op_vehicles_id = [v['vehicle'] for v in waiting_next_op_vehicles]
+        waiting_landing_vehicles_id = [v['vehicle'] for v in waiting_landing_vehicles]
+
+        # --- 3) TAKEOFF COMPLETIONS -------------------------------------------
+        last_op = O - 1
+        last_finish = adjusted_finish[:, last_op]
+        takeoff_finished_by_mask = last_finish <= (t + tol)
+        takeoff_finished_at_exact_mask = np.isclose(last_finish, t, atol=tol)
+
+        def _ids_from_mask(msk: np.ndarray) -> List[int]:
+            vs = np.where(msk)[0].tolist()
+            return [v + 1 for v in vs] if return_1_based_vehicle_ids else vs
+
+        takeoff_finished_vehicles_by_t = _ids_from_mask(takeoff_finished_by_mask)
+        takeoff_finishing_at_t_exact = _ids_from_mask(takeoff_finished_at_exact_mask)
+
+        counts = {
+            'active': sum(1 for x in processing_vehicles if x['state'] == 'active'),
+            'waiting': len(waiting_vehicles),
+            'waiting_next_op': len(waiting_next_op_vehicles),
+            'waiting_landing': len(waiting_landing_vehicles),
+            'processing_total': len(processing_vehicles),
+            'takeoff_finished_by_t': int(np.sum(takeoff_finished_by_mask)),
+            'takeoff_finishing_at_t_exact': int(np.sum(takeoff_finished_at_exact_mask)),
+        }
+
+        return {
+            'processing_vehicles': processing_vehicles,
+            'waiting_vehicles': waiting_vehicles,
+            'waiting_next_op_vehicles': waiting_next_op_vehicles,
+            'waiting_landing_vehicles': waiting_landing_vehicles,
+            'processing_vehicles_ids': processing_vehicles_id,
+            'processing_operation_ids': processing_vehicles_operation,
+            'processing_resource_ids': processing_vehicles_resource,
+            'waiting_next_op_vehicles_ids': waiting_next_op_vehicles_id,
+            'waiting_landing_vehicles_ids': waiting_landing_vehicles_id,
+            'counts': counts,
+            'takeoff_finished_vehicles_by_t': takeoff_finished_vehicles_by_t,
+            'takeoff_finishing_at_t_exact': takeoff_finishing_at_t_exact,
+        }
