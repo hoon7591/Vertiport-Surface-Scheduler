@@ -228,6 +228,7 @@ def visualize_gantt(solution, vehicle_ids, *arg):
     elif arg[3] == 'save':
         plt.savefig(f'{solver_type}_{arg[2]}.pdf', dpi=300)
         plt.close()
+        print(f"Saved interactive Gantt to {solver_type}_{arg[2]}.pdf")
 
 
 def visualize_gantt_plotly(

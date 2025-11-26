@@ -35,7 +35,7 @@ def RHC(scenario_RHC_config, scenario_exp, scenario_true) -> Solution:
             scenario_exp, scenario_true, instance_from_scenario_exp, activated_vehicle_id_exp, scheduling_horizon,
             update_interval, processing_vehicles_id, processing_vehicles_op, remaining_proc_time
         )
-        solution_schedule = solve(instance_from_scenario_exp, solver="exact_RHC", is_numerical_exp=False,
+        solution_schedule = solve(instance_from_scenario_exp, solver="exact_RHC", is_numerical_exp=True,
                                       processing_vehicles_op=processing_vehicles_op, processing_vehicles_res=processing_vehicles_res,
                                       horizon_start=current_time, obj_option="weighted_sum")
 
@@ -61,7 +61,7 @@ def RHC(scenario_RHC_config, scenario_exp, scenario_true) -> Solution:
             current_time += update_interval
             scheduling_horizon = [current_time, current_time + scenario_RHC_config.scheduling_horizon_length]
             continue
-        solution_run = solve(instance_from_scenario_true, solver="run_RHC2", is_numerical_exp=True,
+        solution_run = solve(instance_from_scenario_true, solver="run_RHC", is_numerical_exp=False,
                              planned_resource_assignment=all_assigned_resources_run,
                              planned_operation_start_times=all_start_times_run,
                              vehicle_original_id=activated_vehicle_id_true)

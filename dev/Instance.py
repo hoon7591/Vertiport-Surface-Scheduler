@@ -41,7 +41,7 @@ Hyper Parameter Lists for Problem Generation in InstanceConfig
 # due_a: due_a[vehicle]
 # due_d: due_d[vehicle]
 # vehicle_type: vehicle_type[vehicle]
-# ST: ST[operation_pair, v, v', resource(pad)] (dictionary; keys = operation_pair tuple such as (1, 1), (5, 1), ...)
+# ST: ST[operation_pair, v, v', resource(pad)] (dictionary; keys = operation_pair tuple such as (1, 1), (5, 1), ...), (o'/v': following operation, vehicle)
 # weights: weights in objective function (1D list)
 #          => weights for obj definition is already declared in hyper_param_setting
 # M: big-M in formulation

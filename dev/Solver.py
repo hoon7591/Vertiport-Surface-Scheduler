@@ -450,7 +450,7 @@ class ExactSolverRHC(SolverStrategyRHC):
 
         # Solve the model
         if is_numerical_exp:
-            model.setParam('TimeLimit', 100)
+            model.setParam('TimeLimit', 10)
             model.optimize()
             if model.Status == GRB.TIME_LIMIT:
                 is_runtime_over = True
@@ -633,6 +633,8 @@ class FCFS_HeuristicSolver(SolverStrategy):
                                 break
                             elif a:
                                 resource.state = ResourceState.SEPARATION_DELAY
+                        if break_flag:
+                            break
 
             if event is None and simulator.is_simulation_complete() is False and is_numerical_exp:
                 is_deadlock = True
@@ -675,6 +677,15 @@ class RunRHC(RunStrategyRHC):
                                         == planned_operation_start_times[vehicle_original_id[vehicle.id], operation]):
                                 if simulator.current_time >= planned_operation_start_times[vehicle_original_id[vehicle.id], operation]:
 
+                                    if len(resource.log_operation_finish_times) > 0 and operation in [0, 4]:
+                                        finish = resource.log_operation_finish_times[-1]
+                                        pre_v = resource.previous_vehicle_operation[0]
+                                        pre_op = resource.previous_vehicle_operation[1]
+                                        available_time = finish + instance.ST[(pre_op, operation)][pre_v][vehicle.id][resource.id]
+                                        if available_time > event.time:
+                                            if resource.state == ResourceState.IDLE:
+                                                resource.state = ResourceState.SEPARATION_DELAY
+
                                     # a = 0
                                     # # if resource.state == ResourceState.SEPARATION_DELAY and (event.event_type == EventType.RESOURCE_AVAILABLE or event.event_type == EventType.VEHICLE_ARRIVAL or event.event_type == EventType.OPERATION_COMPLETE) and resource.id == event.resource_id:
                                     # if resource.state == ResourceState.SEPARATION_DELAY and event.event_type == EventType.RESOURCE_AVAILABLE and resource.id == event.resource_id:
@@ -693,7 +704,14 @@ class RunRHC(RunStrategyRHC):
                                     # elif a:
                                     #     resource.state = ResourceState.SEPARATION_DELAY
                                     elif (event.event_type == EventType.RESOURCE_AVAILABLE or event.event_type == EventType.VEHICLE_ARRIVAL or event.event_type == EventType.OPERATION_COMPLETE) and resource.state == ResourceState.SEPARATION_DELAY:
-                                        separation_clear_event = Event(time=simulator.current_time,
+                                        available_time = 0.0
+                                        if len(resource.log_operation_finish_times) > 0 and operation in [0, 4]:
+                                            finish = resource.log_operation_finish_times[-1]
+                                            pre_v = resource.previous_vehicle_operation[0]
+                                            pre_op = resource.previous_vehicle_operation[1]
+                                            available_time = finish + instance.ST[(pre_op, operation)][pre_v][vehicle.id][resource.id]
+                                        new_event_time = max(simulator.current_time, available_time)
+                                        separation_clear_event = Event(time=new_event_time,
                                                                        event_type=EventType.RESOURCE_AVAILABLE,
                                                                        vehicle_id=vehicle.id,
                                                                        resource_id=resource.id,
@@ -703,8 +721,16 @@ class RunRHC(RunStrategyRHC):
                                         resource.state = ResourceState.IDLE
                                 else:
                                     if operation == 0 and event.event_type == EventType.VEHICLE_ARRIVAL:
-                                        arrival_event = Event(time=planned_operation_start_times[vehicle_original_id[vehicle.id], operation],
-                                                              event_type=EventType.VEHICLE_ARRIVAL,
+                                        available_time = 0.0
+                                        if len(resource.log_operation_finish_times) > 0 and operation in [0, 4]:
+                                            finish = resource.log_operation_finish_times[-1]
+                                            pre_v = resource.previous_vehicle_operation[0]
+                                            pre_op = resource.previous_vehicle_operation[1]
+                                            available_time = finish + instance.ST[(pre_op, operation)][pre_v][vehicle.id][resource.id]
+                                        new_event_time = max(planned_operation_start_times[vehicle_original_id[vehicle.id], operation],
+                                                             available_time)
+                                        arrival_event = Event(time=new_event_time,
+                                                              event_type=EventType.RESOURCE_AVAILABLE,
                                                               vehicle_id=vehicle.id,
                                                               resource_id=resource.id,
                                                               operation_id=operation,
@@ -712,7 +738,15 @@ class RunRHC(RunStrategyRHC):
                                         heapq.heappush(simulator.event_queue, arrival_event)
                                         vehicle.state = VehicleState.WAITING_FOR_LANDING
                                     elif event.event_type == EventType.OPERATION_COMPLETE:
-                                        completion_event = Event(time=planned_operation_start_times[vehicle_original_id[vehicle.id], operation],
+                                        available_time = 0.0
+                                        if len(resource.log_operation_finish_times) > 0 and operation in [0, 4]:
+                                            finish = resource.log_operation_finish_times[-1]
+                                            pre_v = resource.previous_vehicle_operation[0]
+                                            pre_op = resource.previous_vehicle_operation[1]
+                                            available_time = finish + instance.ST[(pre_op, operation)][pre_v][vehicle.id][resource.id]
+                                        new_event_time = max(planned_operation_start_times[vehicle_original_id[vehicle.id], operation],
+                                                             available_time)
+                                        completion_event = Event(time=new_event_time,
                                                                  event_type=EventType.RESOURCE_AVAILABLE,
                                                                  vehicle_id=vehicle.id,
                                                                  resource_id=resource.id,
@@ -763,24 +797,35 @@ class RunRHC2(RunStrategyRHC):
                             vehicle = waiting_vehicles[i]  # selection logic
                             resource = available_resources[j]  # selection logic
 
-                            if resource.id == planned_resource_assignment[vehicle_original_id[vehicle.id], operation]:
+                            if resource.id == planned_resource_assignment[vehicle_original_id[vehicle.id], operation] or operation in [1, 3]:
                                 if simulator.current_time >= planned_operation_start_times[vehicle_original_id[vehicle.id], operation]:
 
-                                    # Error fixing of separation time reflection; only the worst case separation is considered before
-                                    a = 0
-                                    if resource.state == ResourceState.SEPARATION_DELAY and event.event_type == EventType.RESOURCE_AVAILABLE and resource.id == event.resource_id:
-                                        for k in range(len(event.data['vehicle_operation_pairs'])):
-                                            if vehicle.id == event.data['vehicle_operation_pairs'][k]['vehicle_id'] and operation == event.data['vehicle_operation_pairs'][k]['operation']:
-                                                resource.state = ResourceState.IDLE
-                                                a = 1
-                                                break
+                                    # # Error fixing of separation time reflection; only the worst case separation is considered before
+                                    # a = 0
+                                    # if resource.state == ResourceState.SEPARATION_DELAY and event.event_type == EventType.RESOURCE_AVAILABLE and resource.id == event.resource_id:
+                                    #     for k in range(len(event.data['vehicle_operation_pairs'])):
+                                    #         if vehicle.id == event.data['vehicle_operation_pairs'][k]['vehicle_id'] and operation == event.data['vehicle_operation_pairs'][k]['operation']:
+                                    #             resource.state = ResourceState.IDLE
+                                    #             a = 1
+                                    #             break
 
                                     if simulator.can_assign_vehicle_to_resource(vehicle.id, resource.id, operation):
                                         simulator.assign_vehicle_to_resource_now(vehicle.id, resource.id, operation)
                                         break_flag = True
                                         break
-                                    elif a:
-                                        resource.state = ResourceState.SEPARATION_DELAY
+                                    # elif a:
+                                    #     resource.state = ResourceState.SEPARATION_DELAY
+                                    elif resource.state == ResourceState.OCCUPIED:
+                                        if resource.log_operation_types[-1] < instance.num_operations - 1:
+                                            if simulator.current_time == planned_operation_start_times[vehicle_original_id[resource.log_allocated_vehicles[-1]], resource.log_operation_types[-1] + 1]:
+                                                one_more_chance_event = Event(time=simulator.current_time,
+                                                                              event_type=EventType.RESOURCE_AVAILABLE,
+                                                                              vehicle_id=vehicle.id,
+                                                                              resource_id=resource.id,
+                                                                              operation_id=operation,
+                                                                              event_id=event.event_id)
+                                                heapq.heappush(simulator.event_queue, one_more_chance_event)
+                                                resource.state = ResourceState.IDLE
 
                                 else:
                                     replace_event = Event(time=planned_operation_start_times[vehicle_original_id[vehicle.id], operation],
@@ -797,6 +842,8 @@ class RunRHC2(RunStrategyRHC):
                                         for k, v in VehicleStateToOperation.mapping.items():
                                             inverse_mapping[v].append(k)
                                         vehicle.state = inverse_mapping[operation][0]
+                        if break_flag:
+                            break
 
             if event is None and simulator.is_simulation_complete() is False and is_numerical_exp:
                 is_deadlock = True

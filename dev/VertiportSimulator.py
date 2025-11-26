@@ -847,14 +847,15 @@ class VertiportSimulator:
                     resource.id, self.current_time)
                 resource.allocation_prohibited_vehicle_n_operation.clear()
         else:
-            # Handle full resource availability (traditional behavior)
+            # Handle full resource availability (traditional behavior, for RHC)
             if resource.state == ResourceState.PROCESSING:
                 return
             resource.state = ResourceState.IDLE
-            resource.allocation_prohibited_vehicle_n_operation.clear() 
-            self.logger.debug("Resource %d became IDLE at time %.2f", 
-                             resource.id, self.current_time)
+            resource.allocation_prohibited_vehicle_n_operation.clear()
+            self.logger.debug("Resource %d became IDLE at time %.2f",
+                              resource.id, self.current_time)
 
+            # Handle full resource availability (traditional behavior, for RHC2)
             # if len(resource.allocation_prohibited_vehicle_n_operation) > 0:
             #     finish = resource.log_operation_finish_times[-1]
             #     pre_v = resource.previous_vehicle_operation[0]
@@ -867,6 +868,8 @@ class VertiportSimulator:
             #     if available_time >= event.time:
             #         return
             # if resource.state == ResourceState.PROCESSING:
+            #     return
+            # if resource.state == ResourceState.OCCUPIED:
             #     return
             # resource.state = ResourceState.IDLE     # Problematic for RHC
             # resource.allocation_prohibited_vehicle_n_operation.clear()
@@ -1222,8 +1225,7 @@ class VertiportSimulatorRecedingHorizon(VertiportSimulator):
 
         for res_id in range(start_idx, end_idx):
             resource = self.resources[res_id]
-            # if resource.state == ResourceState.IDLE or resource.state == ResourceState.SEPARATION_DELAY or resource.state == ResourceState.OCCUPIED:      # for RHC & RHC3
-            if resource.state == ResourceState.IDLE or resource.state == ResourceState.SEPARATION_DELAY:        # for RHC2
+            if resource.state == ResourceState.IDLE or resource.state == ResourceState.SEPARATION_DELAY or resource.state == ResourceState.OCCUPIED:      # for RHC & RHC3
                 available.append(resource)
 
         return available
