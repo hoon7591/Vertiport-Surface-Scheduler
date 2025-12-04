@@ -13,7 +13,6 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 import logging
 from collections import defaultdict
-
 from Instance import Instance
 from Solution import Solution
 
@@ -1171,6 +1170,16 @@ class VertiportSimulator:
         # Fill arrays from vehicle data
         for vehicle in self.vehicles.values():
             v_id = vehicle.id
+            if len(vehicle.log_start_times) != 5:
+                middle_indices = [
+                    i + 1
+                    for i in range(len(vehicle.log_start_times) - 2)
+                    if vehicle.log_start_times[i] == vehicle.log_start_times[i + 1] == vehicle.log_start_times[i + 2]
+                ]
+                for idx in sorted(middle_indices, reverse=True):
+                    vehicle.log_start_times.pop(idx)
+                    vehicle.log_operation_finish_times.pop(idx)
+                    vehicle.log_assigned_resources.pop(idx)
             for op in range(min(len(vehicle.log_start_times), num_operations)):
                 start_times[v_id, op] = vehicle.log_start_times[op]
                 finish_times[v_id, op] = vehicle.log_operation_finish_times[op]
@@ -1225,7 +1234,7 @@ class VertiportSimulatorRecedingHorizon(VertiportSimulator):
 
         for res_id in range(start_idx, end_idx):
             resource = self.resources[res_id]
-            if resource.state == ResourceState.IDLE or resource.state == ResourceState.SEPARATION_DELAY or resource.state == ResourceState.OCCUPIED:      # for RHC & RHC3
+            if resource.state == ResourceState.IDLE or resource.state == ResourceState.SEPARATION_DELAY or resource.state == ResourceState.OCCUPIED:
                 available.append(resource)
 
         return available

@@ -685,6 +685,9 @@ class RunRHC(RunStrategyRHC):
                                         if available_time > event.time:
                                             if resource.state == ResourceState.IDLE:
                                                 resource.state = ResourceState.SEPARATION_DELAY
+                                        else:
+                                            if resource.state != ResourceState.PROCESSING:
+                                                resource.state = ResourceState.IDLE
 
                                     # a = 0
                                     # # if resource.state == ResourceState.SEPARATION_DELAY and (event.event_type == EventType.RESOURCE_AVAILABLE or event.event_type == EventType.VEHICLE_ARRIVAL or event.event_type == EventType.OPERATION_COMPLETE) and resource.id == event.resource_id:

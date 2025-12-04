@@ -46,7 +46,7 @@ class ScenarioRHCConfig:
     disturbance_std_proc: List[float] = field(default_factory=lambda: [0.3, 0.5, 0.3])
     disturbance_std_ready: float = 3.0
     dynamic_arrival_v_id: List[int] = field(default_factory=lambda: [])
-    dynamic_arrival_aware_time: List[float] = field(default_factory=lambda: [20.0, 4.0])        # [mean, std]
+    dynamic_arrival_aware_time: List[float] = field(default_factory=lambda: [15.0, 3.0])        # [mean, std]
     dynamic_proc_v_id: List[int] = field(default_factory=lambda: [])
     dynamic_proc_op: List[int] = field(default_factory=lambda: [])
     dynamic_proc_inc_time: List[float] = field(default_factory=lambda: [])          # specifically defined by user
@@ -263,7 +263,7 @@ class Scenario:
         vehicle_dynamic_arrival_aware_time = np.full(num_vehicles, -1.0)
         for i in range(num_vehicles):
             if whether_vehicle_dynamic_arrival[i]:
-                vehicle_dynamic_arrival_aware_time[i] = max(12.0, np.random.normal(config.dynamic_arrival_aware_time[0], config.dynamic_arrival_aware_time[1]))
+                vehicle_dynamic_arrival_aware_time[i] = np.clip(np.random.normal(config.dynamic_arrival_aware_time[0], config.dynamic_arrival_aware_time[1]), 10.0, config.scheduling_horizon_length)
 
         return cls(
             config.seed, config.num_operations, config.num_vehicles_per_hour, num_vehicles, vehicle_id, config.num_pad,

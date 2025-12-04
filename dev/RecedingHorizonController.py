@@ -1,5 +1,4 @@
 import copy
-
 from Scenario import ScenarioRHCConfig, Scenario
 from Solver import solve
 from Solution import Solution
@@ -8,9 +7,10 @@ from Visualizer import visualize_gantt, visualize_gantt_plotly, visualize_top5_v
 from typing import Any, List
 from dataclasses import dataclass, field
 import numpy as np
+import pickle
 
 
-def RHC(scenario_RHC_config, scenario_exp, scenario_true) -> Solution:
+def RHC(scenario_RHC_config, scenario_exp, scenario_true, is_file_gen) -> Solution:
     current_time = 0.0
     scheduling_horizon = [current_time, current_time + scenario_RHC_config.scheduling_horizon_length]
     update_interval = scenario_RHC_config.update_interval
@@ -35,12 +35,16 @@ def RHC(scenario_RHC_config, scenario_exp, scenario_true) -> Solution:
             scenario_exp, scenario_true, instance_from_scenario_exp, activated_vehicle_id_exp, scheduling_horizon,
             update_interval, processing_vehicles_id, processing_vehicles_op, remaining_proc_time
         )
+        if is_file_gen:
+            with open(f'instance_exp_{current_time}.pkl', 'wb') as file:
+                pickle.dump(instance_from_scenario_exp, file)
         solution_schedule = solve(instance_from_scenario_exp, solver="exact_RHC", is_numerical_exp=True,
                                       processing_vehicles_op=processing_vehicles_op, processing_vehicles_res=processing_vehicles_res,
                                       horizon_start=current_time, obj_option="weighted_sum")
 
-        visualize_gantt(solution_schedule, activated_vehicle_id_exp, processing_vehicles_id, processing_vehicles_op, current_time, 'save')
-        visualize_gantt_plotly(solution_schedule, activated_vehicle_id_exp, processing_vehicles_id, processing_vehicles_op, current_time, 'save')
+        if is_file_gen:
+            visualize_gantt(solution_schedule, activated_vehicle_id_exp, processing_vehicles_id, processing_vehicles_op, current_time, 'save')
+            visualize_gantt_plotly(solution_schedule, activated_vehicle_id_exp, processing_vehicles_id, processing_vehicles_op, current_time, 'save')
 
         for i in range(len(activated_vehicle_id_exp)):
             for j in range(scenario_exp.num_operations):
@@ -61,7 +65,24 @@ def RHC(scenario_RHC_config, scenario_exp, scenario_true) -> Solution:
             current_time += update_interval
             scheduling_horizon = [current_time, current_time + scenario_RHC_config.scheduling_horizon_length]
             continue
-        solution_run = solve(instance_from_scenario_true, solver="run_RHC", is_numerical_exp=False,
+        if is_file_gen:
+            with open(f'instance_true_{current_time}.pkl', 'wb') as file:
+                pickle.dump(instance_from_scenario_true, file)
+            RHC_info = {
+                "all_assigned_resources_schedule": all_assigned_resources_schedule,
+                "all_start_times_schedule": all_start_times_schedule,
+                "all_assigned_resources_run": all_assigned_resources_run,
+                "all_start_times_run": all_start_times_run,
+                "processing_vehicles_id": processing_vehicles_id,
+                "processing_vehicles_op": processing_vehicles_op,
+                "processing_vehicles_res": processing_vehicles_res,
+                "remaining_proc_time": remaining_proc_time,
+                "activated_vehicle_id_exp": activated_vehicle_id_exp,
+                "activated_vehicle_id_true": activated_vehicle_id_true
+            }
+            with open(f'RHC_info_{current_time}.pkl', 'wb') as file:
+                pickle.dump(RHC_info, file)
+        solution_run = solve(instance_from_scenario_true, solver="run_RHC", is_numerical_exp=True,
                              planned_resource_assignment=all_assigned_resources_run,
                              planned_operation_start_times=all_start_times_run,
                              vehicle_original_id=activated_vehicle_id_true)
@@ -84,8 +105,9 @@ def RHC(scenario_RHC_config, scenario_exp, scenario_true) -> Solution:
                 remaining_proc_time.append(0.0)
             processing_vehicles_id[i] = activated_vehicle_id_true[processing_vehicles_id[i]]
 
-        visualize_gantt(solution_run, activated_vehicle_id_true, [], [], current_time, 'save')
-        visualize_gantt_plotly(solution_run, activated_vehicle_id_true, [], [], current_time, 'save')
+        if is_file_gen:
+            visualize_gantt(solution_run, activated_vehicle_id_true, [], [], current_time, 'save')
+            visualize_gantt_plotly(solution_run, activated_vehicle_id_true, [], [], current_time, 'save')
 
         for i in waiting_landing_vehicles_id:
             scenario_exp.vehicle_arrival_times[activated_vehicle_id_true[i]] = current_time + update_interval
@@ -94,6 +116,8 @@ def RHC(scenario_RHC_config, scenario_exp, scenario_true) -> Solution:
         scheduling_horizon = [current_time, current_time + scenario_RHC_config.scheduling_horizon_length]
 
         if len(snapshot['takeoff_finished_vehicles_by_t']) == scenario_exp.num_vehicles:
+            visualize_gantt(solution_run, activated_vehicle_id_true, [], [], current_time, 'save')
+            visualize_gantt_plotly(solution_run, activated_vehicle_id_true, [], [], current_time, 'save')
             final_solution = solution_run
             break
 
