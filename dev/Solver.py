@@ -673,9 +673,9 @@ class RunRHC(RunStrategyRHC):
                             vehicle = waiting_vehicles[i]  # selection logic
                             resource = available_resources[j]  # selection logic
                             if resource.id == planned_resource_assignment[vehicle_original_id[vehicle.id], operation]\
-                                    or (operation in [1, 3] and planned_operation_start_times[vehicle_original_id[vehicle.id], operation + 1]
-                                        == planned_operation_start_times[vehicle_original_id[vehicle.id], operation]):
-                                if simulator.current_time >= planned_operation_start_times[vehicle_original_id[vehicle.id], operation]:
+                                    or (operation in [1, 3] and round(planned_operation_start_times[vehicle_original_id[vehicle.id], operation + 1], 9)
+                                        == round(planned_operation_start_times[vehicle_original_id[vehicle.id], operation], 9)):
+                                if round(simulator.current_time, 9) >= round(planned_operation_start_times[vehicle_original_id[vehicle.id], operation], 9):
 
                                     if len(resource.log_operation_finish_times) > 0 and operation in [0, 4]:
                                         finish = resource.log_operation_finish_times[-1]

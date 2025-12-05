@@ -56,7 +56,7 @@ def RHC(scenario_RHC_config, scenario_exp, scenario_true, is_file_gen) -> Soluti
         if 'activated_vehicle_id_true' in locals() or 'activated_vehicle_id_true' in globals():
             for i in range(len(activated_vehicle_id_true)):
                 for j in range(scenario_true.num_operations):
-                    if solution_run.start_times[i, j] <= current_time:
+                    if round(solution_run.start_times[i, j], 9) <= round(current_time, 9):
                         all_start_times_run[activated_vehicle_id_true[i], j] = solution_run.start_times[i, j]
                         all_assigned_resources_run[activated_vehicle_id_true[i], j] = solution_run.assigned_resources[i, j]
 

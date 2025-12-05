@@ -145,9 +145,9 @@ if __name__ == "__main__":
     # solution = solve(instance_from_scenario_exp, solver="exact_RHC", is_numerical_exp=False, processing_vehicles_op=[0, 0, 3, 2, 2, 2, 2, 2], processing_vehicles_res=[0, 1, 3, 5, 6, 7, 8, 9], horizon_start=40.0, obj_option="weighted_sum")
     # visualize_gantt(solution, activated_vehicle_id_exp, [42, 145, 72, 98, 171, 237, 10, 100], [0, 0, 3, 2, 2, 2, 2, 2], None, 'show')
 
-    # with open('instance_true_985.0.pkl', 'rb') as file:
+    # with open('instance_true_564.0.pkl', 'rb') as file:
     #     instance_from_scenario_true = pickle.load(file)
-    # with open('RHC_info_985.0.pkl', 'rb') as file:
+    # with open('RHC_info_564.0.pkl', 'rb') as file:
     #     RHC_info = pickle.load(file)
     # solution = solve(instance_from_scenario_true, solver="run_RHC", is_numerical_exp=True,
     #                  planned_resource_assignment=RHC_info["all_assigned_resources_run"],
