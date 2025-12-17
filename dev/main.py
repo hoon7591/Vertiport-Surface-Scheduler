@@ -129,6 +129,11 @@ if __name__ == "__main__":
     visualize_gantt(solution, activated_vehicle_id_true, [], [], None, 'save')
     visualize_gantt_plotly(solution, activated_vehicle_id_true, [], [], None, 'save')
 
+    instance_from_scenario_true, activated_vehicle_id_true = Scenario.scenario_to_instance_true(scenario_true, 1200.0)
+    solution = solve(instance_from_scenario_true, solver="FCFS_heuristic_random", is_numerical_exp=True)
+    visualize_gantt(solution, activated_vehicle_id_true, [], [], None, 'save')
+    visualize_gantt_plotly(solution, activated_vehicle_id_true, [], [], None, 'save')
+
     # instance_from_scenario_exp, activated_vehicle_id_exp, ready_in_horizon_vehicle_id_exp = Scenario.scenario_to_instance_exp(scenario_exp, [0.0, 50.0], 3.0, [], [], [])
     # solution = solve(instance_from_scenario_exp, solver="exact", is_numerical_exp=False)
     # visualize_gantt(solution, activated_vehicle_id_exp, [], [], None, 'show')

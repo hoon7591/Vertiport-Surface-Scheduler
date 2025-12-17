@@ -1,4 +1,5 @@
 import time
+import random
 from abc import ABC, abstractmethod
 from gurobipy import GRB, Model, quicksum
 import numpy as np
@@ -646,6 +647,60 @@ class FCFS_HeuristicSolver(SolverStrategy):
         return simulator._generate_solution(runtime, is_deadlock, is_runtime_over, solver_type="FCFS_heuristic")
 
 
+class FCFS_HeuristicRandomSolver(SolverStrategy):
+    def solve(self, instance: Instance, is_numerical_exp: bool, **kwargs) -> Solution:
+        # Create simulator
+        simulator = VertiportSimulator(instance, is_numerical_exp)
+        is_deadlock = False
+        is_runtime_over = False
+
+        # Step-by-step control with FCFS logic
+        solve_start_time = time.time()
+        while not simulator.is_simulation_complete():
+            event = simulator.step_to_next_event()
+
+            # FCFS scheduling logic here - TODO : improve more - multiple vehicles and multiple resources
+            for operation in range(instance.num_operations):
+                waiting_vehicles = simulator.get_waiting_vehicles(operation)
+                available_resources = simulator.get_available_resources(operation)
+                random.shuffle(available_resources)
+
+                # Make assignment decisions
+                if waiting_vehicles and available_resources:
+                    break_flag = False
+                    for i in range(len(waiting_vehicles)):
+                        for j in range(len(available_resources)):
+                            vehicle = waiting_vehicles[i]  # selection logic
+                            resource = available_resources[j]  # selection logic
+
+                            # Error fixing of separation time reflection; only the worst case separation is considered before
+                            a = 0
+                            if resource.state == ResourceState.SEPARATION_DELAY and event.event_type == EventType.RESOURCE_AVAILABLE and resource.id == event.resource_id:
+                                for k in range(len(event.data['vehicle_operation_pairs'])):
+                                    if vehicle.id == event.data['vehicle_operation_pairs'][k]['vehicle_id'] and operation == event.data['vehicle_operation_pairs'][k]['operation']:
+                                        resource.state = ResourceState.IDLE
+                                        a = 1
+                                        break
+
+                            if simulator.can_assign_vehicle_to_resource(vehicle.id, resource.id, operation):
+                                simulator.assign_vehicle_to_resource_now(vehicle.id, resource.id, operation)
+                                break_flag = True
+                                break
+                            elif a:
+                                resource.state = ResourceState.SEPARATION_DELAY
+                        if break_flag:
+                            break
+
+            if event is None and simulator.is_simulation_complete() is False and is_numerical_exp:
+                is_deadlock = True
+                break
+
+        solve_end_time = time.time()
+        runtime = solve_end_time - solve_start_time
+
+        return simulator._generate_solution(runtime, is_deadlock, is_runtime_over, solver_type="FCFS_heuristic_random")
+
+
 class RunRHC(RunStrategyRHC):
     def solve(self, instance: Instance, is_numerical_exp: bool, planned_resource_assignment: np.ndarray,
               planned_operation_start_times: np.ndarray, vehicle_original_id: List[int]) -> Solution:
@@ -998,6 +1053,7 @@ _SOLVER_INSTANCES = {
     "FCFS_landing_Gurobi": FCFSSolver(is_objective_enabled=True, FCFS_for_landing_only=True),
     "no_rule_SAT": NoRuleSolver(),
     "FCFS_heuristic": FCFS_HeuristicSolver(),
+    "FCFS_heuristic_random": FCFS_HeuristicRandomSolver(),
     "exact_RHC": ExactSolverRHC(),
     "run_RHC": RunRHC(),
     "run_RHC2": RunRHC2(),

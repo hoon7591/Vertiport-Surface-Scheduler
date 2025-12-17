@@ -211,10 +211,10 @@ class Instance:
         TAT = np.zeros(config.num_vehicles)
         for i in range(config.num_vehicles):
             proc_gate[i][0] = config.proc_gate_v[vehicle_type[i]]
-            TAT[i] = proc_gate[i][0]
         for i in range(config.num_vehicles):
             for j in range(config.num_gate):
                 proc_gate[i][j] = proc_gate[i][0] + 0.15 * (j + 1)
+            TAT[i] = np.mean(proc_gate[i])
 
         proc_takeoff = np.zeros((config.num_vehicles, config.num_pad))
         for i in range(config.num_vehicles):
