@@ -1222,7 +1222,13 @@ class VertiportSimulator:
         )
 
 
+# 
 class VertiportSimulatorRecedingHorizon(VertiportSimulator):
+    """Vertiport Simulator for Receding Horizon Control (RHC) Vertiport Simulator 
+    used for assigning decisions from Receding Horizon Control, this class overrides 
+    resource assignment related methods, so that artificial deadlock avoidance conditions 
+    are not applied, and only resources decided by the receding horizon controller 
+    are considered for assignment."""
     def get_available_resources(self, operation: int) -> List[Resource]:
         """Get list of resources available for specified operation"""
         resource_ranges = self._build_resource_ranges()
