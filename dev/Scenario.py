@@ -41,7 +41,6 @@ class ScenarioRHCConfig:
     # for receding horizon control
     scheduling_horizon_length: float = 50.0  # in minutes
     update_interval: float = 1.0  # in minutes
-    scheduler_solving_time_limit: float = 10.0  # in seconds
     std_param_from_update_interval: float = 1.0 # adjust ratio of update interval as a std of stochastic bridge
     operation_hour: int = 18
     disturbance_std_proc: List[float] = field(default_factory=lambda: [0.3, 0.5, 0.3])

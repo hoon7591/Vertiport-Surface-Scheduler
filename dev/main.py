@@ -87,7 +87,7 @@ if __name__ == "__main__":
     scenario_RHC_config = ScenarioRHCConfig(scheduling_horizon_length=30.0, update_interval=1.0, operation_hour=18,
                                             num_vehicles_per_hour=12, disturbance_std_proc=[0.3, 0.5, 0.3],
                                             disturbance_std_ready=3.0, is_unified_buffer=True, num_pad=2,
-                                            num_buffer=2, num_gate=8, scheduler_solving_time_limit=10.0)
+                                            num_buffer=2, num_gate=8)
     ### For test with dynamic arrival and processing ###
     # scenario_RHC_config = ScenarioRHCConfig(scheduling_horizon_length=30.0, update_interval=1.0, operation_hour=18,
     #                                         num_vehicles_per_hour=10, disturbance_std_proc=[0.3, 0.5, 0.3],
@@ -165,6 +165,6 @@ if __name__ == "__main__":
     # visualize_gantt_plotly(solution, RHC_info["activated_vehicle_id_true"], [], [], None, 'show')
 
     ### RHC Execution (obj_option: "weighted_sum", "vehicle_wise_max", "weighted_sum_of_max") ###
-    final_solution = RHC(scenario_RHC_config, scenario_exp, scenario_true, obj_option="weighted_sum", is_file_gen=False)
+    final_solution = RHC(scenario_RHC_config, scenario_exp, scenario_true, obj_option="weighted_sum", is_file_gen=False, scheduler_runtime_limit=10.0)
 
     print("Test End")
