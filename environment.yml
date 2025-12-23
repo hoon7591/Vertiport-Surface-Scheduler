@@ -1,4 +1,4 @@
-name: vertiport_surface2
+name: vertiport_surface
 channels:
   - conda-forge
 dependencies:
