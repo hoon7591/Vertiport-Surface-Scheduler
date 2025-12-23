@@ -18,6 +18,7 @@ class ExperimentConfig:
     ETD_margin_minus_NED_exp: List[int] = field(default_factory=lambda: [1, 2])
     ETA_ready_diff_sigma_exp: List[int] = field(default_factory=lambda: [1, 3, 5])
     is_unified_buffer_exp: List[bool] = field(default_factory=lambda: [True, False])
+    time_limit: float = 100.0  # in seconds
 
 
 def _subfolder_name(num_vehicles, pads, buffers, gates, ETD_margin, GCM, sigma, unified):
@@ -136,7 +137,7 @@ def Numerical_Experiment(exp_config: ExperimentConfig = ExperimentConfig()):
                         # for solver_type in ["FCFS_heuristic", "exact", "FCFS_Gurobi", "FCFS_landing_Gurobi",      # whole solver options (7 cases)
                         #                     "FCFS_SAT", "FCFS_landing_SAT", "no_rule_SAT"]:
                         for solver_type in ["FCFS_heuristic", "exact"]:
-                            solution = solve(instance, solver=solver_type, is_numerical_exp=True)
+                            solution = solve(instance, solver=solver_type, is_numerical_exp=True, solving_time_limit=exp_config.time_limit)
                             num_deadlock += int(getattr(solution, "is_deadlock", False))
                             num_runtime_over += int(getattr(solution, "is_runtime_over", False))
 

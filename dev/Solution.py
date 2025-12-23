@@ -1,3 +1,4 @@
+import copy
 import numpy as np
 from typing import Dict, List, Any, Optional
 from Instance import Instance  # Ensure Instance is imported from its module
@@ -73,32 +74,128 @@ class Solution:
         # Ensure we have valid dimensions
         if self.num_vehicles is None or self.num_operations is None:
             return
-            
-        # Waiting times between operations
-        self.waiting_times = np.zeros((self.num_vehicles, self.num_operations - 1))
-        for v in range(self.num_vehicles):
-            for o in range(self.num_operations - 1):
-                next_start = self.start_times[v, o + 1]
-                current_finish = self._get_operation_finish_time(v, o)
-                self.waiting_times[v, o] = max(0, next_start - current_finish)
-        
+
         # Operation durations
         self.operation_durations = np.zeros((self.num_vehicles, self.num_operations))
         for v in range(self.num_vehicles):
             for o in range(self.num_operations):
                 self.operation_durations[v, o] = self._get_operation_duration(v, o)
+        self.operation_durations_consider_buffer = copy.deepcopy(self.operation_durations)
+
+        # Waiting times between operations
+        self.waiting_times = np.zeros((self.num_vehicles, self.num_operations - 1))
+        self.waiting_times_consider_buffer = np.zeros((self.num_vehicles, self.num_operations - 1))
+        for v in range(self.num_vehicles):
+            for o in range(self.num_operations - 1):
+                next_start = self.start_times[v, o + 1]
+                current_finish = self._get_operation_finish_time(v, o)
+                wait = max(0.0, next_start - current_finish)
+                self.waiting_times[v, o] = wait
+                self.waiting_times_consider_buffer[v, o] = wait
+        buffer_ops = []
+        if self.is_unified_buffer:
+            if self.num_buffer > 0:
+                buffer_ops = [self.num_operations - 4, self.num_operations - 2]
+        else:
+            if self.num_buffer_in > 0 and self.num_buffer_out > 0:
+                buffer_ops = [self.num_operations - 4, self.num_operations - 2]
+            elif self.num_buffer_in > 0:
+                buffer_ops = [self.num_operations - 3]
+            elif self.num_buffer_out > 0:
+                buffer_ops = [self.num_operations - 2]
+        for v in range(self.num_vehicles):
+            for o in buffer_ops:
+                self.waiting_times_consider_buffer[v, o] = self.operation_durations[v, o]
+                self.operation_durations_consider_buffer[v, o] = 0.0
+
+        # Constrained and unconstrained waiting times between operations
+        self.constrained_waiting_times = np.zeros((self.num_vehicles, self.num_operations - 1))
+        self.unconstrained_waiting_times = copy.deepcopy(self.waiting_times_consider_buffer)
+        for v in range(self.num_vehicles):
+            planned_gate_close = self.vehicle_planned_gate_close_times[v]
+            if self.is_unified_buffer:
+                if self.num_buffer > 0:
+                    current_finish = self._get_operation_finish_time(v, self.num_operations - 3)
+                    self.constrained_waiting_times[v, self.num_operations - 3] = max(0, planned_gate_close - current_finish)
+                    self.unconstrained_waiting_times[v, self.num_operations - 3] -= self.constrained_waiting_times[v, self.num_operations - 3]
+                else:
+                    current_finish = self._get_operation_finish_time(v, self.num_operations - 2)
+                    self.constrained_waiting_times[v, self.num_operations - 2] = max(0, planned_gate_close - current_finish)
+                    self.unconstrained_waiting_times[v, self.num_operations - 2] -= self.constrained_waiting_times[v, self.num_operations - 2]
+            else:
+                if self.num_buffer_out > 0:
+                    current_finish = self._get_operation_finish_time(v, self.num_operations - 3)
+                    self.constrained_waiting_times[v, self.num_operations - 3] = max(0, planned_gate_close - current_finish)
+                    self.unconstrained_waiting_times[v, self.num_operations - 3] -= self.constrained_waiting_times[v, self.num_operations - 3]
+                else:
+                    current_finish = self._get_operation_finish_time(v, self.num_operations - 2)
+                    self.constrained_waiting_times[v, self.num_operations - 2] = max(0, planned_gate_close - current_finish)
+                    self.unconstrained_waiting_times[v, self.num_operations - 2] -= self.constrained_waiting_times[v, self.num_operations - 2]
                 
         # Total tardiness metrics
         self.total_arrival_tardiness = np.sum(self.arrival_time_tardiness)
         self.total_departure_tardiness = np.sum(self.departure_time_tardiness)
+        self.total_tardiness = self.total_arrival_tardiness + self.total_departure_tardiness
+        self.avg_arrival_tardiness = self.total_arrival_tardiness / self.num_vehicles if self.num_vehicles > 0 else 0
+        self.avg_departure_tardiness = self.total_departure_tardiness / self.num_vehicles if self.num_vehicles > 0 else 0
+        self.avg_total_tardiness = self.total_tardiness / self.num_vehicles if self.num_vehicles > 0 else 0
 
         # Max tardiness metrics
         self.max_arrival_tardiness = np.max(self.arrival_time_tardiness)
         self.max_departure_tardiness = np.max(self.departure_time_tardiness)
-        self.max_vehicle_wise_tardiness = np.max(self.arrival_time_tardiness + self.departure_time_tardiness)
+        vehicle_wise_tardiness = self.arrival_time_tardiness + self.departure_time_tardiness
+        self.max_vehicle_wise_tardiness = np.max(vehicle_wise_tardiness)
+
+        # Fairness of tardiness metrics
+        self.std_vehicle_wise_tardiness = np.std(vehicle_wise_tardiness)
+        non_delayed_vehicles_mask = np.isclose(vehicle_wise_tardiness, 0.0, atol=1e-9)
+        self.non_delayed_vehicles_rate = np.sum(non_delayed_vehicles_mask) / self.num_vehicles if self.num_vehicles > 0 else 0
         
         # Resource utilization
-        self.resource_utilization = self._compute_resource_utilization()
+        self.total_idle_time = np.zeros(self.num_resources)
+        self.total_processing_time = np.zeros(self.num_resources)
+        self.total_waiting_time = np.zeros(self.num_resources)
+        self.total_constrained_waiting_time = np.zeros(self.num_resources)
+        self.total_unconstrained_waiting_time = np.zeros(self.num_resources)
+        self.total_occupation_time = np.zeros(self.num_resources)
+        self.resource_occupation_rate = np.zeros(self.num_resources)
+        self.effective_occupation_rate = np.zeros(self.num_resources)
+        self.ineffective_occupation_rate = np.zeros(self.num_resources)
+        self.total_time = np.max(self.finish_times) if self.finish_times.size > 0 else 1
+
+        self.assigned_resources_int = np.rint(self.assigned_resources).astype(int)
+        for v in range(self.num_vehicles):
+            for o in range(self.num_operations):
+                self.total_processing_time[self.assigned_resources_int[v, o]] += self.operation_durations_consider_buffer[v, o]
+                self.total_waiting_time[self.assigned_resources_int[v, o]] += self.waiting_times_consider_buffer[v, o] if o < self.num_operations - 1 else 0
+                self.total_constrained_waiting_time[self.assigned_resources_int[v, o]] += self.constrained_waiting_times[v, o] if o < self.num_operations - 1 else 0
+                self.total_unconstrained_waiting_time[self.assigned_resources_int[v, o]] += self.unconstrained_waiting_times[v, o] if o < self.num_operations - 1 else 0
+
+        for r in range(self.num_resources):
+            self.total_idle_time[r] = self.total_time - (self.total_processing_time[r] + self.total_waiting_time[r])
+            self.total_occupation_time[r] = self.total_processing_time[r] + self.total_waiting_time[r]
+            self.resource_occupation_rate[r] = (self.total_occupation_time[r] / self.total_time) * 100 if self.total_time > 0 else 0
+            self.effective_occupation_rate[r] = (self.total_processing_time[r] / self.total_occupation_time[r]) * 100 if self.total_occupation_time[r] > 0 else 0
+            self.ineffective_occupation_rate[r] = (self.total_unconstrained_waiting_time[r] / self.total_occupation_time[r]) * 100 if self.total_occupation_time[r] > 0 else 0
+
+        self.pad_resource_occupation_rate = np.mean(self.resource_occupation_rate[:self.num_pad]) if self.num_pad > 0 else 0
+        self.pad_effective_occupation_rate = np.mean(self.effective_occupation_rate[:self.num_pad]) if self.num_pad > 0 else 0
+        self.pad_ineffective_occupation_rate = np.mean(self.ineffective_occupation_rate[:self.num_pad]) if self.num_pad > 0 else 0
+        self.gate_resource_occupation_rate = np.mean(self.resource_occupation_rate[-self.num_gate:]) if self.num_gate > 0 else 0
+        self.gate_effective_occupation_rate = np.mean(self.effective_occupation_rate[-self.num_gate:]) if self.num_gate > 0 else 0
+        self.gate_ineffective_occupation_rate = np.mean(self.ineffective_occupation_rate[-self.num_gate:]) if self.num_gate > 0 else 0
+        self.total_resource_occupation_rate = np.mean(self.resource_occupation_rate) if self.num_resources > 0 else 0
+        self.total_effective_occupation_rate = np.mean(self.effective_occupation_rate) if self.num_resources > 0 else 0
+        self.total_ineffective_occupation_rate = np.mean(self.ineffective_occupation_rate) if self.num_resources > 0 else 0
+        self.pad_unconstrained_waiting_time = np.sum(self.total_unconstrained_waiting_time[:self.num_pad]) if self.num_pad > 0 else 0
+        self.gate_unconstrained_waiting_time = np.sum(self.total_unconstrained_waiting_time[-self.num_gate:]) if self.num_gate > 0 else 0
+        self.buffer_unconstrained_waiting_time = np.sum(self.total_unconstrained_waiting_time[self.num_pad:self.num_resources - self.num_gate]) if self.num_resources - self.num_pad - self.num_gate > 0 else 0
+        self.sum_total_unconstrained_waiting_time = np.sum(self.total_unconstrained_waiting_time) if self.num_resources > 0 else 0
+
+        # Cost of delay index => Gate:Taxi:Airborne = 1:1.85:2.85
+        self.cost_of_delay_index = self.gate_unconstrained_waiting_time + 1.85 * (self.pad_unconstrained_waiting_time + self.buffer_unconstrained_waiting_time) + 2.85 * self.total_arrival_tardiness
+
+        # self.resource_utilization = self._compute_resource_utilization()
         
     def _get_operation_finish_time(self, vehicle: int, operation: int) -> float:
         """Get the actual finish time for an operation considering buffer operations"""
@@ -136,23 +233,23 @@ class Solution:
         finish = self._get_operation_finish_time(vehicle, operation)
         return max(0, finish - start)
     
-    def _compute_resource_utilization(self) -> Dict[int, float]:
-        """Compute utilization percentage for each resource"""
-        if not hasattr(self, 'num_resource') or self.num_vehicles is None or self.num_operations is None:
-            return {}
-            
-        utilization = {}
-        total_time = np.max(self.finish_times) if self.finish_times.size > 0 else 1
-        
-        for r in range(self.num_resources):
-            busy_time = 0
-            for v in range(self.num_vehicles):
-                for o in range(self.num_operations):
-                    if int(self.assigned_resources[v, o]) == r:
-                        busy_time += self._get_operation_duration(v, o)
-            utilization[r] = (busy_time / total_time) * 100 if total_time > 0 else 0
-            
-        return utilization
+    # def _compute_resource_utilization(self) -> Dict[int, float]:
+    #     """Compute utilization percentage for each resource"""
+    #     if not hasattr(self, 'num_resource') or self.num_vehicles is None or self.num_operations is None:
+    #         return {}
+    #
+    #     utilization = {}
+    #     total_time = np.max(self.finish_times) if self.finish_times.size > 0 else 1
+    #
+    #     for r in range(self.num_resources):
+    #         busy_time = 0
+    #         for v in range(self.num_vehicles):
+    #             for o in range(self.num_operations):
+    #                 if int(self.assigned_resources[v, o]) == r:
+    #                     busy_time += self._get_operation_duration(v, o)
+    #         utilization[r] = (busy_time / total_time) * 100 if total_time > 0 else 0
+    #
+    #     return utilization
     
     def get_summary_stats(self) -> Dict[str, float]:
         """Get summary statistics for the solution"""

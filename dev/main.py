@@ -73,7 +73,8 @@ if __name__ == "__main__":
     #################### Numerical Study ####################
     # exp_config = ExperimentConfig(num_vehicles_pad_buffer_gate_exp=[[10, 14, 2, 6], [15, 21, 3, 9], [20, 28, 4, 12]],
     #                               ETD_margin_exp=[3, 5], ETD_margin_minus_NED_exp=[1, 2],
-    #                               ETA_ready_diff_sigma_exp=[1, 3, 5], is_unified_buffer_exp=[True, False])
+    #                               ETA_ready_diff_sigma_exp=[1, 3, 5], is_unified_buffer_exp=[True, False],
+    #                               time_limit=100.0)
     # Numerical_Experiment(exp_config)
 
     #################### Scenario Generation ####################
@@ -81,17 +82,17 @@ if __name__ == "__main__":
     # scenario_RHC_config = ScenarioRHCConfig(scheduling_horizon_length=30.0, update_interval=1.0, operation_hour=18,
     #                                         num_vehicles_per_hour=10, disturbance_std_proc=[0.0, 0.0, 0.0],
     #                                         disturbance_std_ready=0.0, is_unified_buffer=True, num_pad=2,
-    #                                         num_buffer=2, num_gate=8)
+    #                                         num_buffer=2, num_gate=8, scheduler_solving_time_limit=10.0)
     ### For test with non-zero std (different results between run and solve are expected) ###
     scenario_RHC_config = ScenarioRHCConfig(scheduling_horizon_length=30.0, update_interval=1.0, operation_hour=18,
-                                            num_vehicles_per_hour=10, disturbance_std_proc=[0.3, 0.5, 0.3],
-                                            disturbance_std_ready=1.0, is_unified_buffer=True, num_pad=2,
-                                            num_buffer=2, num_gate=8)
+                                            num_vehicles_per_hour=12, disturbance_std_proc=[0.3, 0.5, 0.3],
+                                            disturbance_std_ready=3.0, is_unified_buffer=True, num_pad=2,
+                                            num_buffer=2, num_gate=8, scheduler_solving_time_limit=10.0)
     ### For test with dynamic arrival and processing ###
     # scenario_RHC_config = ScenarioRHCConfig(scheduling_horizon_length=30.0, update_interval=1.0, operation_hour=18,
     #                                         num_vehicles_per_hour=10, disturbance_std_proc=[0.3, 0.5, 0.3],
     #                                         disturbance_std_ready=5.0, is_unified_buffer=True, num_pad=2,
-    #                                         num_buffer=2, num_gate=8,
+    #                                         num_buffer=2, num_gate=8, scheduler_solving_time_limit=10.0,
     #                                         dynamic_arrival_v_id=[98, 77, 66, 111, 71, 61, 138, 225, 89, 48, 93, 38, 2, 7, 52],
     #                                         dynamic_proc_v_id=[99, 117, 78, 8, 35, 150],
     #                                         dynamic_proc_op=[2, 2, 2, 4, 0, 2],
@@ -124,6 +125,7 @@ if __name__ == "__main__":
     # solution = solve(instance_from_scenario_exp, solver="exact_RHC", is_numerical_exp=False, processing_vehicles_op=[0, 2, 2, 2, 2, 2, 2], processing_vehicles_res=[0, 5, 7, 8, 11, 12, 13], horizon_start=80.0)
     # visualize_gantt(solution, activated_vehicle_id_exp, [77, 29, 32, 58, 6, 148, 83], [0, 2, 2, 2, 2, 2, 2], None, 'show')
 
+    ### FCFS Heuristic Execution to Compare with RHC Results ###
     instance_from_scenario_true, activated_vehicle_id_true = Scenario.scenario_to_instance_true(scenario_true, 1200.0)
     solution = solve(instance_from_scenario_true, solver="FCFS_heuristic", is_numerical_exp=True)
     visualize_gantt(solution, activated_vehicle_id_true, [], [], None, 'save')
@@ -150,6 +152,7 @@ if __name__ == "__main__":
     # solution = solve(instance_from_scenario_exp, solver="exact_RHC", is_numerical_exp=False, processing_vehicles_op=[0, 0, 3, 2, 2, 2, 2, 2], processing_vehicles_res=[0, 1, 3, 5, 6, 7, 8, 9], horizon_start=40.0, obj_option="weighted_sum")
     # visualize_gantt(solution, activated_vehicle_id_exp, [42, 145, 72, 98, 171, 237, 10, 100], [0, 0, 3, 2, 2, 2, 2, 2], None, 'show')
 
+    ### For Debugging of RHC Implementation ###
     # with open('instance_true_564.0.pkl', 'rb') as file:
     #     instance_from_scenario_true = pickle.load(file)
     # with open('RHC_info_564.0.pkl', 'rb') as file:
@@ -161,6 +164,7 @@ if __name__ == "__main__":
     # # visualize_gantt(solution, activated_vehicle_id_true, [], [], None, 'show')
     # visualize_gantt_plotly(solution, RHC_info["activated_vehicle_id_true"], [], [], None, 'show')
 
-    final_solution = RHC(scenario_RHC_config, scenario_exp, scenario_true, False)
+    ### RHC Execution (obj_option: "weighted_sum", "vehicle_wise_max", "weighted_sum_of_max") ###
+    final_solution = RHC(scenario_RHC_config, scenario_exp, scenario_true, obj_option="weighted_sum", is_file_gen=False)
 
     print("Test End")

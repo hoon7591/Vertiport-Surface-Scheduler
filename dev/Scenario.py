@@ -41,6 +41,7 @@ class ScenarioRHCConfig:
     # for receding horizon control
     scheduling_horizon_length: float = 50.0  # in minutes
     update_interval: float = 1.0  # in minutes
+    scheduler_solving_time_limit: float = 10.0  # in seconds
     std_param_from_update_interval: float = 1.0 # adjust ratio of update interval as a std of stochastic bridge
     operation_hour: int = 18
     disturbance_std_proc: List[float] = field(default_factory=lambda: [0.3, 0.5, 0.3])
@@ -128,6 +129,9 @@ class Scenario:
         self.vehicle_dynamic_arrival_aware_time = vehicle_dynamic_arrival_aware_time
         self.proc_real = proc_real
         self.std_param_from_update_interval = std_param_from_update_interval
+
+        # 🔹 stochastic bridge 전용 난수 생성기
+        self.bridge_rng = np.random.default_rng(self.seed + 10000)
 
     @classmethod
     def from_scenario_config_exp(cls, config: "ScenarioRHCConfig") -> "Scenario":
@@ -418,7 +422,7 @@ class Scenario:
                                               + (scheduling_horizon[0] - scenario_exp.first_activated_time_of_ready[activated_vehicle_id_exp[i]]) \
                                               * (ready_in_horizon_true[i] - scenario_exp.vehicle_arrival_times_init[activated_vehicle_id_exp[i]]) \
                                               / (ready_in_horizon_true[i] - scenario_exp.first_activated_time_of_ready[activated_vehicle_id_exp[i]]) \
-                                              + np.random.normal(0, sigma_for_stochastic_bridge)
+                                              + scenario_exp.bridge_rng.normal(0, sigma_for_stochastic_bridge)
             else:
                 if scheduling_horizon[0] == 0.0 and ready_in_horizon_exp[i] < scheduling_horizon[1] - update_interval:
                     scenario_exp.first_activated_time_of_ready[activated_vehicle_id_exp[i]] = ready_in_horizon_exp[i] - scheduling_horizon[1]
@@ -469,39 +473,39 @@ class Scenario:
         ), activated_vehicle_id_exp, ready_in_horizon_vehicle_id_exp
 
     @classmethod
-    def scenario_to_instance_true(cls, scenario, current_time):
-        ready_in_horizon_vehicle_id_true = [i for i, x in enumerate(scenario.vehicle_arrival_times) if
+    def scenario_to_instance_true(cls, scenario_true, current_time):
+        ready_in_horizon_vehicle_id_true = [i for i, x in enumerate(scenario_true.vehicle_arrival_times) if
                                             0.0 <= x <= current_time]
         activated_vehicle_id_true = ready_in_horizon_vehicle_id_true
 
         proc_in_horizon = [
-            [[row_res for row_res in scenario.proc_real[op][v]] for v in activated_vehicle_id_true]
-            for op in range(len(scenario.proc_real))
+            [[row_res for row_res in scenario_true.proc_real[op][v]] for v in activated_vehicle_id_true]
+            for op in range(len(scenario_true.proc_real))
         ]
 
-        ready_in_horizon = scenario.vehicle_arrival_times[activated_vehicle_id_true]
+        ready_in_horizon = scenario_true.vehicle_arrival_times[activated_vehicle_id_true]
 
-        vehicle_planned_arrival_times_in_horizon = scenario.vehicle_planned_arrival_times[activated_vehicle_id_true]
-        vehicle_planned_departure_times_in_horizon = scenario.vehicle_planned_departure_times[activated_vehicle_id_true]
-        vehicle_planned_gate_close_times_in_horizon = scenario.vehicle_planned_gate_close_times[activated_vehicle_id_true]
-        vehicle_type_in_horizon = scenario.vehicle_type[activated_vehicle_id_true]
+        vehicle_planned_arrival_times_in_horizon = scenario_true.vehicle_planned_arrival_times[activated_vehicle_id_true]
+        vehicle_planned_departure_times_in_horizon = scenario_true.vehicle_planned_departure_times[activated_vehicle_id_true]
+        vehicle_planned_gate_close_times_in_horizon = scenario_true.vehicle_planned_gate_close_times[activated_vehicle_id_true]
+        vehicle_type_in_horizon = scenario_true.vehicle_type[activated_vehicle_id_true]
 
         o_key_map = {
             0: (0, 0),
-            1: (0, scenario.num_operations - 1),
-            2: (scenario.num_operations - 1, 0),
-            3: (scenario.num_operations - 1, scenario.num_operations - 1)
+            1: (0, scenario_true.num_operations - 1),
+            2: (scenario_true.num_operations - 1, 0),
+            3: (scenario_true.num_operations - 1, scenario_true.num_operations - 1)
         }
         ST_in_horizon = {}
-        for o in range(len(scenario.st_list)):
+        for o in range(len(scenario_true.st_list)):
             key = o_key_map[o]
             ST_in_horizon[key] = []
             for i in activated_vehicle_id_true:
                 row = []
-                v_i = scenario.vehicle_type[i]
+                v_i = scenario_true.vehicle_type[i]
                 for j in activated_vehicle_id_true:
-                    v_j = scenario.vehicle_type[j]
-                    row.append(scenario.st_list[o][v_i][v_j])
+                    v_j = scenario_true.vehicle_type[j]
+                    row.append(scenario_true.st_list[o][v_i][v_j])
                 ST_in_horizon[key].append(row)
 
         def round_nested_list(lst, digits=2):
@@ -515,11 +519,11 @@ class Scenario:
         ST_rounded_in_horizon = {k: round_nested_list(v, digits=2) for k, v in ST_in_horizon.items()}
 
         return Instance(
-            scenario.seed, scenario.num_operations, len(activated_vehicle_id_true), scenario.num_pad, scenario.num_buffer_in,
-            scenario.num_gate, scenario.num_buffer_out, scenario.num_buffer, scenario.num_resource, scenario.objective_weights,
-            scenario.proc_air_v, scenario.proc_air_r, scenario.proc_air_o, scenario.proc_gate_v, scenario.st_list,
-            scenario.maximum_arrival_time, scenario.ETA_ready_diff, scenario.ETD_margin, scenario.gate_close_margin,
-            scenario.is_unified_buffer, ready_in_horizon, proc_in_horizon, vehicle_planned_arrival_times_in_horizon,
+            scenario_true.seed, scenario_true.num_operations, len(activated_vehicle_id_true), scenario_true.num_pad, scenario_true.num_buffer_in,
+            scenario_true.num_gate, scenario_true.num_buffer_out, scenario_true.num_buffer, scenario_true.num_resource, scenario_true.objective_weights,
+            scenario_true.proc_air_v, scenario_true.proc_air_r, scenario_true.proc_air_o, scenario_true.proc_gate_v, scenario_true.st_list,
+            scenario_true.maximum_arrival_time, scenario_true.ETA_ready_diff, scenario_true.ETD_margin, scenario_true.gate_close_margin,
+            scenario_true.is_unified_buffer, ready_in_horizon, proc_in_horizon, vehicle_planned_arrival_times_in_horizon,
             vehicle_planned_departure_times_in_horizon, vehicle_planned_gate_close_times_in_horizon, ST_rounded_in_horizon,
-            vehicle_type_in_horizon, scenario.big_M
+            vehicle_type_in_horizon, scenario_true.big_M
         ), activated_vehicle_id_true

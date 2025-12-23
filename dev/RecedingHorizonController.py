@@ -10,10 +10,11 @@ import numpy as np
 import pickle
 
 
-def RHC(scenario_RHC_config, scenario_exp, scenario_true, is_file_gen) -> Solution:
+def RHC(scenario_RHC_config, scenario_exp, scenario_true, obj_option, is_file_gen) -> Solution:
     current_time = 0.0
     scheduling_horizon = [current_time, current_time + scenario_RHC_config.scheduling_horizon_length]
     update_interval = scenario_RHC_config.update_interval
+    scheduler_solving_time_limit = scenario_RHC_config.scheduler_solving_time_limit
 
     all_assigned_resources_schedule = np.zeros((scenario_exp.num_vehicles, scenario_exp.num_operations), dtype=int) - 1
     all_start_times_schedule = np.zeros((scenario_exp.num_vehicles, scenario_exp.num_operations)) - 1.0
@@ -38,9 +39,9 @@ def RHC(scenario_RHC_config, scenario_exp, scenario_true, is_file_gen) -> Soluti
         if is_file_gen:
             with open(f'instance_exp_{current_time}.pkl', 'wb') as file:
                 pickle.dump(instance_from_scenario_exp, file)
-        solution_schedule = solve(instance_from_scenario_exp, solver="exact_RHC", is_numerical_exp=True,
-                                      processing_vehicles_op=processing_vehicles_op, processing_vehicles_res=processing_vehicles_res,
-                                      horizon_start=current_time, obj_option="weighted_sum")
+        solution_schedule = solve(instance_from_scenario_exp, solver="exact", is_numerical_exp=True,
+                                  processing_vehicles_op=processing_vehicles_op, processing_vehicles_res=processing_vehicles_res,
+                                  horizon_start=current_time, obj_option=obj_option, solving_time_limit=scheduler_solving_time_limit)
 
         if is_file_gen:
             visualize_gantt(solution_schedule, activated_vehicle_id_exp, processing_vehicles_id, processing_vehicles_op, current_time, 'save')
@@ -85,7 +86,8 @@ def RHC(scenario_RHC_config, scenario_exp, scenario_true, is_file_gen) -> Soluti
         solution_run = solve(instance_from_scenario_true, solver="run_RHC", is_numerical_exp=True,
                              planned_resource_assignment=all_assigned_resources_run,
                              planned_operation_start_times=all_start_times_run,
-                             vehicle_original_id=activated_vehicle_id_true)
+                             vehicle_original_id=activated_vehicle_id_true,
+                             obj_option=obj_option)
 
         remaining_proc_time = []
 
