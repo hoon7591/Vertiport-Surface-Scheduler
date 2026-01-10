@@ -33,7 +33,7 @@ class ScenarioRHCConfig:
     st_list_o: List[float] = field(default_factory=lambda: [0.8, 0.6, 0.5, 1.0])
     st_list_r: List[float] = field(default_factory=lambda: [1.0, 0.7, 0.8, 1.0, 1.0, 0.7, 0.8, 1.0])
     ready_max: float = 100.0
-    ETA_ready_diff: List[float] = field(default_factory=lambda: [3, 3])
+    ETA_ready_diff: List[float] = field(default_factory=lambda: [0.0, 6.0])
     ETD_margin: float = 5.0
     gate_close_margin: float = 3.0
     is_unified_buffer: bool = False
@@ -41,12 +41,12 @@ class ScenarioRHCConfig:
     # for receding horizon control
     scheduling_horizon_length: float = 50.0  # in minutes
     update_interval: float = 1.0  # in minutes
-    std_param_from_update_interval: float = 1.0 # adjust ratio of update interval as a std of stochastic bridge
+    coe_bridge_from_update_interval: float = 1.0  # adjust ratio of update interval as a std of stochastic bridge
     operation_hour: int = 18
-    disturbance_std_proc: List[float] = field(default_factory=lambda: [0.3, 0.5, 0.3])
-    disturbance_std_ready: float = 3.0
+    disturbance_proc: List[float] = field(default_factory=lambda: [0.5, 1.0, 0.5])  # half width of uniform distribution
+    disturbance_ready: float = 5.0  # half width of uniform distribution
     dynamic_arrival_v_id: List[int] = field(default_factory=lambda: [])
-    dynamic_arrival_aware_time: List[float] = field(default_factory=lambda: [15.0, 3.0])        # [mean, std]
+    dynamic_arrival_aware_time_low: float = 5.0   # lower bound
     dynamic_proc_v_id: List[int] = field(default_factory=lambda: [])
     dynamic_proc_op: List[int] = field(default_factory=lambda: [])
     dynamic_proc_inc_time: List[float] = field(default_factory=lambda: [])          # specifically defined by user
@@ -90,7 +90,7 @@ class Scenario:
         whether_vehicle_dynamic_arrival: np.ndarray,
         vehicle_dynamic_arrival_aware_time: np.ndarray,
         proc_real: list,
-        std_param_from_update_interval: float,
+        coe_bridge_from_update_interval: float,
     ):
         self.seed = seed
         self.num_operations = num_operations
@@ -127,7 +127,7 @@ class Scenario:
         self.whether_vehicle_dynamic_arrival = whether_vehicle_dynamic_arrival
         self.vehicle_dynamic_arrival_aware_time = vehicle_dynamic_arrival_aware_time
         self.proc_real = proc_real
-        self.std_param_from_update_interval = std_param_from_update_interval
+        self.coe_bridge_from_update_interval = coe_bridge_from_update_interval
 
         # 🔹 stochastic bridge 전용 난수 생성기
         self.bridge_rng = np.random.default_rng(self.seed + 10000)
@@ -226,7 +226,7 @@ class Scenario:
                 else:
                     proc = [proc_landing, proc_buffer_in, proc_gate, proc_buffer_out, proc_takeoff]
 
-        ETA_ready_diff_arr = config.ETA_ready_diff[0] + config.ETA_ready_diff[1] / 2 * np.random.randn(num_vehicles)
+        ETA_ready_diff_arr = np.random.uniform(low=config.ETA_ready_diff[0], high=config.ETA_ready_diff[1], size=num_vehicles)
         vehicle_planned_arrival_times = ready + ETA_ready_diff_arr
         vehicle_planned_departure_times = vehicle_planned_arrival_times + TAT + config.ETD_margin
         vehicle_planned_gate_close_times = vehicle_planned_arrival_times + TAT + config.gate_close_margin
@@ -266,7 +266,7 @@ class Scenario:
         vehicle_dynamic_arrival_aware_time = np.full(num_vehicles, -1.0)
         for i in range(num_vehicles):
             if whether_vehicle_dynamic_arrival[i]:
-                vehicle_dynamic_arrival_aware_time[i] = np.clip(np.random.normal(config.dynamic_arrival_aware_time[0], config.dynamic_arrival_aware_time[1]), 10.0, config.scheduling_horizon_length)
+                vehicle_dynamic_arrival_aware_time[i] = np.random.uniform(low=config.dynamic_arrival_aware_time_low, high=config.scheduling_horizon_length)
 
         return cls(
             config.seed, config.num_operations, config.num_vehicles_per_hour, num_vehicles, vehicle_id, config.num_pad,
@@ -275,7 +275,7 @@ class Scenario:
             config.ETA_ready_diff, config.ETD_margin, config.gate_close_margin, config.is_unified_buffer, ready, ready, proc,
             first_activated_time_of_ready, vehicle_planned_arrival_times, vehicle_planned_departure_times, vehicle_planned_gate_close_times,
             ST_rounded, vehicle_type, M, whether_vehicle_dynamic_arrival, vehicle_dynamic_arrival_aware_time, proc,
-            config.std_param_from_update_interval
+            config.coe_bridge_from_update_interval
         )
 
 
@@ -286,9 +286,10 @@ class Scenario:
         ready = np.zeros(scenario_exp.num_vehicles)
         for i in range(scenario_exp.num_vehicles):
             if scenario_exp.vehicle_arrival_times[i] <= config.scheduling_horizon_length:
-                ready[i] = scenario_exp.vehicle_arrival_times[i] + np.clip(np.random.normal(0, config.disturbance_std_ready * scenario_exp.vehicle_arrival_times[i] / config.scheduling_horizon_length), -3.0, None)
+                disturbance_ready_ = config.disturbance_ready * scenario_exp.vehicle_arrival_times[i] / config.scheduling_horizon_length
+                ready[i] = max(scenario_exp.vehicle_arrival_times[i] + np.random.uniform(-disturbance_ready_, disturbance_ready_), 0.0)
             else:
-                ready[i] = scenario_exp.vehicle_arrival_times[i] + np.clip(np.random.normal(0, config.disturbance_std_ready), -5.0, None)
+                ready[i] = scenario_exp.vehicle_arrival_times[i] + np.random.uniform(-config.disturbance_ready, config.disturbance_ready)
 
         proc_landing = np.zeros((scenario_exp.num_vehicles, scenario_exp.num_pad))
         proc_gate = np.zeros((scenario_exp.num_vehicles, scenario_exp.num_gate))
@@ -311,25 +312,25 @@ class Scenario:
 
         for i in range(scenario_exp.num_vehicles):
             for j in range(scenario_exp.num_pad):
-                proc_landing[i][j] = scenario_exp.proc[0][i][j] + np.clip(np.random.normal(0, config.disturbance_std_proc[0]), -scenario_exp.proc[0][i][j] * 0.2, None)
-                proc_takeoff[i][j] = scenario_exp.proc[-1][i][j] + np.clip(np.random.normal(0, config.disturbance_std_proc[2]), -scenario_exp.proc[-1][i][j] * 0.2, None)
+                proc_landing[i][j] = scenario_exp.proc[0][i][j] + np.random.uniform(-config.disturbance_proc[0], config.disturbance_proc[0])
+                proc_takeoff[i][j] = scenario_exp.proc[-1][i][j] + np.random.uniform(-config.disturbance_proc[2], config.disturbance_proc[2])
 
         if scenario_exp.is_unified_buffer:
             if scenario_exp.num_buffer == 0:
                 for i in range(scenario_exp.num_vehicles):
                     for j in range(scenario_exp.num_gate):
-                        proc_gate[i][j] = scenario_exp.proc[1][i][j] + np.clip(np.random.normal(0, config.disturbance_std_proc[1]), -scenario_exp.proc[1][i][j] * 0.2, None)
+                        proc_gate[i][j] = scenario_exp.proc[1][i][j] + np.random.uniform(-config.disturbance_proc[1], config.disturbance_proc[1])
                 proc = [proc_landing, proc_gate, proc_takeoff]
             else:
                 for i in range(scenario_exp.num_vehicles):
                     for j in range(scenario_exp.num_gate):
-                        proc_gate[i][j] = scenario_exp.proc[2][i][j] + np.clip(np.random.normal(0, config.disturbance_std_proc[1]), -scenario_exp.proc[2][i][j] * 0.2, None)
+                        proc_gate[i][j] = scenario_exp.proc[2][i][j] + np.random.uniform(-config.disturbance_proc[1], config.disturbance_proc[1])
                 proc = [proc_landing, proc_buffer, proc_gate, proc_buffer, proc_takeoff]
         else:
             if scenario_exp.num_buffer_in == 0:
                 for i in range(scenario_exp.num_vehicles):
                     for j in range(scenario_exp.num_gate):
-                        proc_gate[i][j] = scenario_exp.proc[1][i][j] + np.clip(np.random.normal(0, config.disturbance_std_proc[1]), -scenario_exp.proc[1][i][j] * 0.2, None)
+                        proc_gate[i][j] = scenario_exp.proc[1][i][j] + np.random.uniform(-config.disturbance_proc[1], config.disturbance_proc[1])
                 if scenario_exp.num_buffer_out == 0:
                     proc = [proc_landing, proc_gate, proc_takeoff]
                 else:
@@ -337,7 +338,7 @@ class Scenario:
             else:
                 for i in range(scenario_exp.num_vehicles):
                     for j in range(scenario_exp.num_gate):
-                        proc_gate[i][j] = scenario_exp.proc[2][i][j] + np.clip(np.random.normal(0, config.disturbance_std_proc[1]), -scenario_exp.proc[2][i][j] * 0.2, None)
+                        proc_gate[i][j] = scenario_exp.proc[2][i][j] + np.random.uniform(-config.disturbance_proc[1], config.disturbance_proc[1])
                 if scenario_exp.num_buffer_out == 0:
                     proc = [proc_landing, proc_buffer_in, proc_gate, proc_takeoff]
                 else:
@@ -356,7 +357,7 @@ class Scenario:
             ready, ready, proc, scenario_exp.first_activated_time_of_ready, scenario_exp.vehicle_planned_arrival_times,
             scenario_exp.vehicle_planned_departure_times, scenario_exp.vehicle_planned_gate_close_times, scenario_exp.ST,
             scenario_exp.vehicle_type, scenario_exp.big_M, scenario_exp.whether_vehicle_dynamic_arrival,
-            scenario_exp.vehicle_dynamic_arrival_aware_time, proc_real, scenario_exp.std_param_from_update_interval
+            scenario_exp.vehicle_dynamic_arrival_aware_time, proc_real, scenario_exp.coe_bridge_from_update_interval
         )
 
 
@@ -413,15 +414,15 @@ class Scenario:
 
         for i in range(len(processing_vehicles_id), len(activated_vehicle_id_exp)):
             if activated_vehicle_id_exp[i] not in newly_ready_in_horizon_vehicle_id_exp:
-                sigma_for_stochastic_bridge = update_interval * scenario_exp.std_param_from_update_interval\
+                half_width_for_stochastic_bridge = update_interval * scenario_exp.coe_bridge_from_update_interval\
                                               * (ready_in_horizon_true[i] - scheduling_horizon[0])\
                                               / (ready_in_horizon_true[i] - scenario_exp.first_activated_time_of_ready[activated_vehicle_id_exp[i]])
-                if sigma_for_stochastic_bridge >= 0.0:
+                if half_width_for_stochastic_bridge >= 0.0:
                     ready_in_horizon_exp[i] = scenario_exp.vehicle_arrival_times_init[activated_vehicle_id_exp[i]] \
                                               + (scheduling_horizon[0] - scenario_exp.first_activated_time_of_ready[activated_vehicle_id_exp[i]]) \
                                               * (ready_in_horizon_true[i] - scenario_exp.vehicle_arrival_times_init[activated_vehicle_id_exp[i]]) \
                                               / (ready_in_horizon_true[i] - scenario_exp.first_activated_time_of_ready[activated_vehicle_id_exp[i]]) \
-                                              + scenario_exp.bridge_rng.normal(0, sigma_for_stochastic_bridge)
+                                              + scenario_exp.bridge_rng.uniform(-half_width_for_stochastic_bridge, half_width_for_stochastic_bridge)
             else:
                 if scheduling_horizon[0] == 0.0 and ready_in_horizon_exp[i] < scheduling_horizon[1] - update_interval:
                     scenario_exp.first_activated_time_of_ready[activated_vehicle_id_exp[i]] = ready_in_horizon_exp[i] - scheduling_horizon[1]

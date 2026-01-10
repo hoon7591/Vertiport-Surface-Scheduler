@@ -30,7 +30,7 @@ Hyper Parameter Lists for Problem Generation in InstanceConfig
 #          st_list[operation_pair, type of v, type of v', resource]
 # ready_max: maximum of ready time
 # ETA_ready_diff: ETA(=due_a) - ready for all vehicles (1D list)
-#                 [nominal, width] (width/2 corresponds to 1-sigma deviation of normal distribution; 68.27% of values are within this range from nominal value)
+#                 [lower, upper] => ETA - ready ~ Uniform(lower, upper)
 # ETD_margin: ETD(=due_d) = ETA + TAT + "ETD_margin"
 # gate_close_margin: ETA + TAT + "gate_close_margin" (for no-early-departure const.)
 # unified_buffer: If True, buffer_in and buffer_out are unified into a single buffer
@@ -80,7 +80,7 @@ class InstanceConfig:
     st_list_o: List[float] = field(default_factory=lambda: [0.8, 0.6, 0.5, 1.0])
     st_list_r: List[float] = field(default_factory=lambda: [1.0, 0.7, 0.8, 1.0, 1.0, 0.7, 0.8, 1.0])
     ready_max: float = 100.0
-    ETA_ready_diff: List[float] = field(default_factory=lambda: [3, 3])
+    ETA_ready_diff: List[float] = field(default_factory=lambda: [0.0, 6.0])
     ETD_margin: float = 5.0
     gate_close_margin: float = 3.0
     is_unified_buffer: bool = False
@@ -238,7 +238,7 @@ class Instance:
                 else:
                     proc = [proc_landing, proc_buffer_in, proc_gate, proc_buffer_out, proc_takeoff]
 
-        ETA_ready_diff_arr = config.ETA_ready_diff[0] + config.ETA_ready_diff[1] / 2 * np.random.randn(config.num_vehicles)
+        ETA_ready_diff_arr = np.random.uniform(low=config.ETA_ready_diff[0], high=config.ETA_ready_diff[1], size=config.num_vehicles)
         vehicle_planned_arrival_times = ready + ETA_ready_diff_arr
         vehicle_planned_departure_times = vehicle_planned_arrival_times + TAT + config.ETD_margin
         vehicle_planned_gate_close_times = vehicle_planned_arrival_times + TAT + config.gate_close_margin

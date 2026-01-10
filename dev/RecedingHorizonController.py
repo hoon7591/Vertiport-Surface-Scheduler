@@ -40,7 +40,7 @@ def RHC(scenario_RHC_config, scenario_exp, scenario_true, obj_option, is_file_ge
                 pickle.dump(instance_from_scenario_exp, file)
         solution_schedule = solve(instance_from_scenario_exp, solver="exact", is_numerical_exp=True,
                                   processing_vehicles_op=processing_vehicles_op, processing_vehicles_res=processing_vehicles_res,
-                                  horizon_start=current_time, obj_option=obj_option, solving_time_limit=scheduler_runtime_limit)
+                                  horizon_start=current_time, obj_option=obj_option, scheduler_runtime_limit=scheduler_runtime_limit)
 
         if is_file_gen:
             visualize_gantt(solution_schedule, activated_vehicle_id_exp, processing_vehicles_id, processing_vehicles_op, current_time, 'save')

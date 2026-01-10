@@ -73,30 +73,30 @@ if __name__ == "__main__":
     #################### Numerical Study ####################
     # exp_config = ExperimentConfig(num_vehicles_pad_buffer_gate_exp=[[10, 14, 2, 6], [15, 21, 3, 9], [20, 28, 4, 12]],
     #                               ETD_margin_exp=[3, 5], ETD_margin_minus_NED_exp=[1, 2],
-    #                               ETA_ready_diff_sigma_exp=[1, 3, 5], is_unified_buffer_exp=[True, False],
+    #                               ETA_ready_diff_range_exp=[[2.0, 4.0], [0.0, 6.0], [-2.0, 8.0]], is_unified_buffer_exp=[True, False],
     #                               time_limit=100.0)
     # Numerical_Experiment(exp_config)
 
     #################### Scenario Generation ####################
-    ### For test of Run_RHC by setting std as zero (same results between run and solve are expected) ###
+    ### For test of Run_RHC by setting disturbance as zero (same results between run and solve are expected) ###
     # scenario_RHC_config = ScenarioRHCConfig(scheduling_horizon_length=30.0, update_interval=1.0, operation_hour=18,
-    #                                         num_vehicles_per_hour=10, disturbance_std_proc=[0.0, 0.0, 0.0],
-    #                                         disturbance_std_ready=0.0, is_unified_buffer=True, num_pad=2,
-    #                                         num_buffer=2, num_gate=8, scheduler_solving_time_limit=10.0)
-    ### For test with non-zero std (different results between run and solve are expected) ###
-    scenario_RHC_config = ScenarioRHCConfig(scheduling_horizon_length=30.0, update_interval=1.0, operation_hour=18,
-                                            num_vehicles_per_hour=12, disturbance_std_proc=[0.3, 0.5, 0.3],
-                                            disturbance_std_ready=3.0, is_unified_buffer=True, num_pad=2,
-                                            num_buffer=2, num_gate=8)
+    #                                         num_vehicles_per_hour=10, disturbance_proc=[0.0, 0.0, 0.0],
+    #                                         disturbance_ready=0.0, is_unified_buffer=True, num_pad=2,
+    #                                         num_buffer=2, num_gate=8)
+    ### For test with non-zero disturbance (different results between run and solve are expected) ###
+    # scenario_RHC_config = ScenarioRHCConfig(scheduling_horizon_length=30.0, update_interval=1.0, operation_hour=18,
+    #                                         num_vehicles_per_hour=12, disturbance_proc=[0.5, 1.0, 0.5],
+    #                                         disturbance_ready=5.0, is_unified_buffer=True, num_pad=2,
+    #                                         num_buffer=2, num_gate=8)
     ### For test with dynamic arrival and processing ###
-    # scenario_RHC_config = ScenarioRHCConfig(scheduling_horizon_length=30.0, update_interval=1.0, operation_hour=18,
-    #                                         num_vehicles_per_hour=10, disturbance_std_proc=[0.3, 0.5, 0.3],
-    #                                         disturbance_std_ready=5.0, is_unified_buffer=True, num_pad=2,
-    #                                         num_buffer=2, num_gate=8, scheduler_solving_time_limit=10.0,
-    #                                         dynamic_arrival_v_id=[98, 77, 66, 111, 71, 61, 138, 225, 89, 48, 93, 38, 2, 7, 52],
-    #                                         dynamic_proc_v_id=[99, 117, 78, 8, 35, 150],
-    #                                         dynamic_proc_op=[2, 2, 2, 4, 0, 2],
-    #                                         dynamic_proc_inc_time=[10.0, 15.0, 10.0, 5.0, 7.0, 20.0])
+    scenario_RHC_config = ScenarioRHCConfig(scheduling_horizon_length=30.0, update_interval=1.0, operation_hour=18,
+                                            num_vehicles_per_hour=12, disturbance_proc=[0.5, 1.0, 0.5],
+                                            disturbance_ready=5.0, is_unified_buffer=True, num_pad=2,
+                                            num_buffer=2, num_gate=8,
+                                            dynamic_arrival_v_id=[98, 77, 66, 111, 71, 61, 138, 225, 89, 48, 93, 38, 2, 7, 52],
+                                            dynamic_proc_v_id=[99, 117, 78, 8, 35, 150],
+                                            dynamic_proc_op=[2, 2, 2, 4, 0, 2],
+                                            dynamic_proc_inc_time=[10.0, 15.0, 10.0, 5.0, 7.0, 20.0])
     scenario_exp = Scenario.from_scenario_config_exp(scenario_RHC_config)
     scenario_true = Scenario.from_scenario_config_true(scenario_RHC_config, scenario_exp)
 

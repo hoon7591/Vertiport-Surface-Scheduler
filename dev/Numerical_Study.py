@@ -14,40 +14,40 @@ class ExperimentConfig:
         [15, 20, 3, 8],
         [20, 25, 4, 10],
     ])
-    ETD_margin_exp: List[int] = field(default_factory=lambda: [3, 5])
-    ETD_margin_minus_NED_exp: List[int] = field(default_factory=lambda: [1, 2])
-    ETA_ready_diff_sigma_exp: List[int] = field(default_factory=lambda: [1, 3, 5])
+    ETD_margin_exp: List[float] = field(default_factory=lambda: [3.0, 5.0])
+    ETD_margin_minus_NED_exp: List[float] = field(default_factory=lambda: [1.0, 2.0])
+    ETA_ready_diff_range_exp: List[List[float]] = field(default_factory=lambda: [[2.0, 4.0], [0.0, 6.0], [-2.0, 8.0]])
     is_unified_buffer_exp: List[bool] = field(default_factory=lambda: [True, False])
-    time_limit: float = 100.0  # in seconds
+    scheduler_runtime_limit: float = 100.0  # in seconds
 
 
-def _subfolder_name(num_vehicles, pads, buffers, gates, ETD_margin, GCM, sigma, unified):
+def _subfolder_name(num_vehicles, pads, buffers, gates, ETD_margin, GCM, ETA_ready_diff_range, unified):
     if unified:
         return (f"instance_v{num_vehicles}_pad{pads}"
                 f"_buffer{buffers}"
                 f"_gate{gates}_ETD_margin{ETD_margin}"
-                f"_GCM{GCM}_sigma{sigma}_unified{unified}")
+                f"_GCM{GCM}_ETA_ready_diff_range{ETA_ready_diff_range[0]}to{ETA_ready_diff_range[1]}_unified{unified}")
     else:
         return (f"instance_v{num_vehicles}_pad{pads}"
                 f"_bufferin{buffers}"
                 f"_bufferout{buffers}"
                 f"_gate{gates}_ETD_margin{ETD_margin}"
-                f"_GCM{GCM}_sigma{sigma}_unified{unified}")
+                f"_GCM{GCM}_ETA_ready_diff_range{ETA_ready_diff_range[0]}to{ETA_ready_diff_range[1]}_unified{unified}")
 
 
-def _instance_filename(num_vehicles, instance, ETD_margin, sigma, unified, seed, prob_idx):
+def _instance_filename(num_vehicles, instance, ETD_margin, ETA_ready_diff_range, unified, seed, prob_idx):
     if unified:
         return (f"instance_v{num_vehicles}_pad{instance.num_pad}"
                 f"_buffer{instance.num_buffer}"
                 f"_gate{instance.num_gate}_ETD_margin{ETD_margin}"
-                f"_GCM{instance.gate_close_margin}_sigma{sigma}"
+                f"_GCM{instance.gate_close_margin}_ETA_ready_diff_range{ETA_ready_diff_range[0]}to{ETA_ready_diff_range[1]}"
                 f"_unified{unified}_seed{seed}_prob{prob_idx}.pkl")
     else:
         return (f"instance_v{num_vehicles}_pad{instance.num_pad}"
                 f"_bufferin{instance.num_buffer_in}"
                 f"_bufferout{instance.num_buffer_out}"
                 f"_gate{instance.num_gate}_ETD_margin{ETD_margin}"
-                f"_GCM{instance.gate_close_margin}_sigma{sigma}"
+                f"_GCM{instance.gate_close_margin}_ETA_ready_diff_range{ETA_ready_diff_range[0]}to{ETA_ready_diff_range[1]}"
                 f"_unified{unified}_seed{seed}_prob{prob_idx}.pkl")
 
 
@@ -78,12 +78,12 @@ def Numerical_Experiment(exp_config: ExperimentConfig = ExperimentConfig()):
             ETD_margin = exp_config.ETD_margin_exp[i]
             ETD_margin_minus_NED = exp_config.ETD_margin_minus_NED_exp[i]
             GCM = ETD_margin - ETD_margin_minus_NED
-            for sigma in exp_config.ETA_ready_diff_sigma_exp:
+            for ETA_ready_diff_range in exp_config.ETA_ready_diff_range_exp:
                 for unified in exp_config.is_unified_buffer_exp:
 
                     subfolder = _subfolder_name(
                         num_vehicles, pads, buffers, gates,
-                        ETD_margin, GCM, sigma, unified
+                        ETD_margin, GCM, ETA_ready_diff_range, unified
                     )
                     out_dir = instances_root / subfolder
                     out_dir.mkdir(parents=True, exist_ok=True)
@@ -101,7 +101,7 @@ def Numerical_Experiment(exp_config: ExperimentConfig = ExperimentConfig()):
                                 num_gate=gates,
                                 ETD_margin=ETD_margin,
                                 gate_close_margin=GCM,
-                                ETA_ready_diff=[3, sigma],
+                                ETA_ready_diff=[ETA_ready_diff_range[0], ETA_ready_diff_range[1]],
                                 is_unified_buffer=unified,
                                 seed=seed,
                             )
@@ -114,7 +114,7 @@ def Numerical_Experiment(exp_config: ExperimentConfig = ExperimentConfig()):
                                 num_gate=gates,
                                 ETD_margin=ETD_margin,
                                 gate_close_margin=GCM,
-                                ETA_ready_diff=[3, sigma],
+                                ETA_ready_diff=[ETA_ready_diff_range[0], ETA_ready_diff_range[1]],
                                 is_unified_buffer=unified,
                                 seed=seed,
                             )
@@ -123,7 +123,7 @@ def Numerical_Experiment(exp_config: ExperimentConfig = ExperimentConfig()):
 
                         # ---- Save instance pickle ----
                         pkl_name = _instance_filename(
-                            num_vehicles, instance, ETD_margin, sigma, unified, seed, num_solved
+                            num_vehicles, instance, ETD_margin, ETA_ready_diff_range, unified, seed, num_solved
                         )
                         pkl_path = out_dir / pkl_name
                         with pkl_path.open("wb") as fh:
@@ -137,7 +137,7 @@ def Numerical_Experiment(exp_config: ExperimentConfig = ExperimentConfig()):
                         # for solver_type in ["FCFS_heuristic", "exact", "FCFS_Gurobi", "FCFS_landing_Gurobi",      # whole solver options (7 cases)
                         #                     "FCFS_SAT", "FCFS_landing_SAT", "no_rule_SAT"]:
                         for solver_type in ["FCFS_heuristic", "exact"]:
-                            solution = solve(instance, solver=solver_type, is_numerical_exp=True, solving_time_limit=exp_config.time_limit)
+                            solution = solve(instance, solver=solver_type, is_numerical_exp=True, solving_time_limit=exp_config.scheduler_runtime_limit)
                             num_deadlock += int(getattr(solution, "is_deadlock", False))
                             num_runtime_over += int(getattr(solution, "is_runtime_over", False))
 

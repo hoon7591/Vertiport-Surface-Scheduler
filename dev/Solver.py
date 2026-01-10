@@ -349,7 +349,7 @@ class ExactSolver(SolverStrategy):
         processing_vehicles_op = kwargs.get("processing_vehicles_op")
         processing_vehicles_res = kwargs.get("processing_vehicles_res")
         horizon_start = kwargs.get("horizon_start")
-        time_limit = kwargs.get("solving_time_limit")
+        scheduler_runtime_limit = kwargs.get("scheduler_runtime_limit")
 
         # RHC 모드인지 여부 판단
         is_rhc = (
@@ -410,7 +410,7 @@ class ExactSolver(SolverStrategy):
 
         # 🔹 Solve (RHC는 time limit 더 타이트하게)
         if is_numerical_exp or is_rhc:
-            model.setParam("TimeLimit", time_limit)
+            model.setParam("TimeLimit", scheduler_runtime_limit)
             model.optimize()
             if model.Status == GRB.TIME_LIMIT:
                 is_runtime_over = True
@@ -446,7 +446,7 @@ class FCFSSolver(SolverStrategy):
     def solve(self, instance: Instance, is_numerical_exp: bool, **kwargs) -> Solution:
         model, variables = self._setup_base_model(instance)
 
-        time_limit = kwargs.get("solving_time_limit")
+        scheduler_runtime_limit = kwargs.get("scheduler_runtime_limit")
         obj_option = kwargs.get('obj_option', "weighted_sum")
         is_runtime_over = False
 
@@ -495,7 +495,7 @@ class FCFSSolver(SolverStrategy):
 
         # Solve the model
         if is_numerical_exp:
-            model.setParam('TimeLimit', time_limit)
+            model.setParam('TimeLimit', scheduler_runtime_limit)
             model.optimize()
             if model.Status == GRB.TIME_LIMIT:
                 is_runtime_over = True
@@ -551,11 +551,11 @@ class NoRuleSolver(SolverStrategy):
     def solve(self, instance: Instance, is_numerical_exp: bool, **kwargs) -> Solution:
         model, variables = self._setup_base_model(instance)
         is_runtime_over = False
-        time_limit = kwargs.get("solving_time_limit")
+        scheduler_runtime_limit = kwargs.get("scheduler_runtime_limit")
 
         # No objective function set for SAT mode
         if is_numerical_exp:
-            model.setParam('TimeLimit', time_limit)
+            model.setParam('TimeLimit', scheduler_runtime_limit)
             model.optimize()
             if model.Status == GRB.TIME_LIMIT:
                 is_runtime_over = True
