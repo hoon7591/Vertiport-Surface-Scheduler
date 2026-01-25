@@ -370,7 +370,10 @@ class Scenario:
         for i in range(len(activated_vehicle_id_exp_pre)):
             if dynamic_vehicle_arrival_times[activated_vehicle_id_exp_pre[i]] != instance_exp_pre.vehicle_arrival_times[i]:
                 if instance_exp_pre.vehicle_arrival_times[i] <= scheduling_horizon[0]:
-                    pass
+                    if activated_vehicle_id_exp_pre[i] not in processing_vehicles_id and instance_exp_pre.vehicle_arrival_times[i] >= scheduling_horizon[0] - update_interval:
+                        dynamic_vehicle_arrival_times[activated_vehicle_id_exp_pre[i]] = scheduling_horizon[0]
+                    else:
+                        pass
                 else:
                     dynamic_vehicle_arrival_times[activated_vehicle_id_exp_pre[i]] = instance_exp_pre.vehicle_arrival_times[i]
 
@@ -418,11 +421,11 @@ class Scenario:
                                               * (ready_in_horizon_true[i] - scheduling_horizon[0])\
                                               / (ready_in_horizon_true[i] - scenario_exp.first_activated_time_of_ready[activated_vehicle_id_exp[i]])
                 if half_width_for_stochastic_bridge >= 0.0:
-                    ready_in_horizon_exp[i] = scenario_exp.vehicle_arrival_times_init[activated_vehicle_id_exp[i]] \
+                    ready_in_horizon_exp[i] = max(scenario_exp.vehicle_arrival_times_init[activated_vehicle_id_exp[i]] \
                                               + (scheduling_horizon[0] - scenario_exp.first_activated_time_of_ready[activated_vehicle_id_exp[i]]) \
                                               * (ready_in_horizon_true[i] - scenario_exp.vehicle_arrival_times_init[activated_vehicle_id_exp[i]]) \
                                               / (ready_in_horizon_true[i] - scenario_exp.first_activated_time_of_ready[activated_vehicle_id_exp[i]]) \
-                                              + scenario_exp.bridge_rng.uniform(-half_width_for_stochastic_bridge, half_width_for_stochastic_bridge)
+                                              + scenario_exp.bridge_rng.uniform(-half_width_for_stochastic_bridge, half_width_for_stochastic_bridge), scheduling_horizon[0])
             else:
                 if scheduling_horizon[0] == 0.0 and ready_in_horizon_exp[i] < scheduling_horizon[1] - update_interval:
                     scenario_exp.first_activated_time_of_ready[activated_vehicle_id_exp[i]] = ready_in_horizon_exp[i] - scheduling_horizon[1]
