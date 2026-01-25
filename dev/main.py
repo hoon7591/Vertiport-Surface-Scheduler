@@ -52,15 +52,15 @@ if __name__ == "__main__":
     #################### Single Instance Generation ####################
     # config = InstanceConfig(is_unified_buffer=True, num_vehicles=18, num_buffer=2, num_gate=6, num_pad=2)
     # # config = InstanceConfig(is_unified_buffer=False, num_vehicles=15, num_buffer_in=2, num_gate=6, num_pad=2, num_buffer_out=2,
-    # #                         ETD_margin=3, gate_close_margin=2, ETA_ready_diff=[3, 2], seed=27)  # Example: override defaults
+    # #                         ETD_margin=3, gate_close_margin=2, ETA_ready_diff=[-3.0, 6.0, 3.0], seed=27)  # Example: override defaults
     # # config = InstanceConfig(is_unified_buffer=True, num_vehicles=15, num_buffer=2, num_gate=6, num_pad=2,
-    # #                         ETD_margin=3, gate_close_margin=2, ETA_ready_diff=[3, 2], seed=20)
+    # #                         ETD_margin=3, gate_close_margin=2, ETA_ready_diff=[-3.0, 6.0, 3.0], seed=20)
     # # config = InstanceConfig(is_unified_buffer=True, num_vehicles=15, num_buffer=2, num_gate=6, num_pad=2,
-    # #                         ETD_margin=3, gate_close_margin=2, ETA_ready_diff=[3, 2], seed=65)
+    # #                         ETD_margin=3, gate_close_margin=2, ETA_ready_diff=[-3.0, 6.0, 3.0], seed=65)
     # # config = InstanceConfig(is_unified_buffer=True, num_vehicles=15, num_buffer=2, num_gate=6, num_pad=2,
-    # #                         ETD_margin=4, gate_close_margin=2.5, ETA_ready_diff=[3, 2], seed=8)
+    # #                         ETD_margin=4, gate_close_margin=2.5, ETA_ready_diff=[-3.0, 6.0, 3.0], seed=8)
     # # config = InstanceConfig(is_unified_buffer=False, num_vehicles=50, num_buffer_in=2, num_buffer_out=2, num_gate=6, num_pad=2,
-    # #                         ETD_margin=5, gate_close_margin=3, ETA_ready_diff=[3, 6], seed=174)
+    # #                         ETD_margin=5, gate_close_margin=3, ETA_ready_diff=[-5.0, 8.0, 3.0], seed=174)
     # # config = InstanceConfig(is_unified_buffer=True, num_vehicles=50, num_buffer=6, num_gate=18, num_pad=6)
     # # config = InstanceConfig(is_unified_buffer=True, num_vehicles=9, num_buffer=3, num_gate=9, num_pad=3, ready_max=8)
     # instance = generate_instance(config)
@@ -73,30 +73,33 @@ if __name__ == "__main__":
     #################### Numerical Study ####################
     # exp_config = ExperimentConfig(num_vehicles_pad_buffer_gate_exp=[[10, 14, 2, 6], [15, 21, 3, 9], [20, 28, 4, 12]],
     #                               ETD_margin_exp=[3, 5], ETD_margin_minus_NED_exp=[1, 2],
-    #                               ETA_ready_diff_range_exp=[[2.0, 4.0], [0.0, 6.0], [-2.0, 8.0]], is_unified_buffer_exp=[True, False],
+    #                               ETA_ready_diff_range_exp=[[-1.0, 4.0, 3.0], [-3.0, 6.0, 3.0], [-5.0, 8.0, 3.0]], is_unified_buffer_exp=[True, False],
     #                               time_limit=100.0)
     # Numerical_Experiment(exp_config)
 
     #################### Scenario Generation ####################
     ### For test of Run_RHC by setting disturbance as zero (same results between run and solve are expected) ###
-    # scenario_RHC_config = ScenarioRHCConfig(scheduling_horizon_length=30.0, update_interval=1.0, operation_hour=18,
-    #                                         num_vehicles_per_hour=10, disturbance_proc=[0.0, 0.0, 0.0],
-    #                                         disturbance_ready=0.0, is_unified_buffer=True, num_pad=2,
-    #                                         num_buffer=2, num_gate=8)
+    scenario_RHC_config = ScenarioRHCConfig(scheduling_horizon_length=30.0, update_interval=1.0, operation_hour=18,
+                                            num_vehicles_per_hour=12,
+                                            disturbance_proc=[[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]],
+                                            disturbance_ready=[0.0, 0.0, 0.0], is_unified_buffer=True, num_pad=2,
+                                            num_buffer=2, num_gate=8)
     ### For test with non-zero disturbance (different results between run and solve are expected) ###
     # scenario_RHC_config = ScenarioRHCConfig(scheduling_horizon_length=30.0, update_interval=1.0, operation_hour=18,
-    #                                         num_vehicles_per_hour=12, disturbance_proc=[0.5, 1.0, 0.5],
-    #                                         disturbance_ready=5.0, is_unified_buffer=True, num_pad=2,
+    #                                         num_vehicles_per_hour=12,
+    #                                         disturbance_proc=[[-0.2, 1.0, 0.2], [-1.0, 3.0, 0.0], [-0.2, 1.0, 0.2]],
+    #                                         disturbance_ready=[-3.0, 10.0, 1.0], is_unified_buffer=True, num_pad=2,
     #                                         num_buffer=2, num_gate=8)
     ### For test with dynamic arrival and processing ###
-    scenario_RHC_config = ScenarioRHCConfig(scheduling_horizon_length=30.0, update_interval=1.0, operation_hour=18,
-                                            num_vehicles_per_hour=12, disturbance_proc=[0.5, 1.0, 0.5],
-                                            disturbance_ready=5.0, is_unified_buffer=True, num_pad=2,
-                                            num_buffer=2, num_gate=8,
-                                            dynamic_arrival_v_id=[98, 77, 66, 111, 71, 61, 138, 225, 89, 48, 93, 38, 2, 7, 52],
-                                            dynamic_proc_v_id=[99, 117, 78, 8, 35, 150],
-                                            dynamic_proc_op=[2, 2, 2, 4, 0, 2],
-                                            dynamic_proc_inc_time=[10.0, 15.0, 10.0, 5.0, 7.0, 20.0])
+    # scenario_RHC_config = ScenarioRHCConfig(scheduling_horizon_length=30.0, update_interval=1.0, operation_hour=18,
+    #                                         num_vehicles_per_hour=12,
+    #                                         disturbance_proc=[[-0.2, 1.0, 0.2], [-1.0, 3.0, 0.0], [-0.2, 1.0, 0.2]],
+    #                                         disturbance_ready=[-3.0, 10.0, 1.0], is_unified_buffer=True, num_pad=2,
+    #                                         num_buffer=2, num_gate=8,
+    #                                         dynamic_arrival_v_id=[98, 77, 66, 111, 71, 61, 138, 225, 89, 48, 93, 38, 2, 7, 52],
+    #                                         dynamic_proc_v_id=[99, 117, 78, 8, 35, 150],
+    #                                         dynamic_proc_op=[2, 2, 2, 4, 0, 2],
+    #                                         dynamic_proc_inc_time=[10.0, 15.0, 10.0, 5.0, 7.0, 20.0])
     scenario_exp = Scenario.from_scenario_config_exp(scenario_RHC_config)
     scenario_true = Scenario.from_scenario_config_true(scenario_RHC_config, scenario_exp)
 

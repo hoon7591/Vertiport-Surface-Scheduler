@@ -30,7 +30,8 @@ Hyper Parameter Lists for Problem Generation in InstanceConfig
 #          st_list[operation_pair, type of v, type of v', resource]
 # ready_max: maximum of ready time
 # ETA_ready_diff: ETA(=due_a) - ready for all vehicles (1D list)
-#                 [lower, upper] => ETA - ready ~ Uniform(lower, upper)
+#                 [lower, upper, mode] => ETA - ready ~ Beta_PERT(alpha, beta); for deterministic case, use [c, c, c]
+# lambda_beta_pert: parameter for Beta-PERT distribution; in general case, 4.0 is used
 # ETD_margin: ETD(=due_d) = ETA + TAT + "ETD_margin"
 # gate_close_margin: ETA + TAT + "gate_close_margin" (for no-early-departure const.)
 # unified_buffer: If True, buffer_in and buffer_out are unified into a single buffer
@@ -80,7 +81,8 @@ class InstanceConfig:
     st_list_o: List[float] = field(default_factory=lambda: [0.8, 0.6, 0.5, 1.0])
     st_list_r: List[float] = field(default_factory=lambda: [1.0, 0.7, 0.8, 1.0, 1.0, 0.7, 0.8, 1.0])
     ready_max: float = 100.0
-    ETA_ready_diff: List[float] = field(default_factory=lambda: [0.0, 6.0])
+    ETA_ready_diff: List[float] = field(default_factory=lambda: [-3.0, 6.0, 3.0])
+    lambda_beta_pert: float = 4.0
     ETD_margin: float = 5.0
     gate_close_margin: float = 3.0
     is_unified_buffer: bool = False
@@ -106,6 +108,7 @@ class Instance:
         st_list: Any,
         maximum_arrival_time: float, # defines instance's horizon 
         ETA_ready_diff: List[float],
+        lambda_beta_pert: float,
         ETD_margin: float,
         gate_close_margin: float,
         is_unified_buffer: bool,
@@ -135,6 +138,7 @@ class Instance:
         self.st_list = st_list
         self.maximum_arrival_time = maximum_arrival_time
         self.ETA_ready_diff = ETA_ready_diff # TODO : check if it needs?
+        self.lambda_beta_pert = lambda_beta_pert
         self.ETD_margin = ETD_margin # TODO : check if it needs?
         self.gate_close_margin = gate_close_margin
         self.is_unified_buffer = is_unified_buffer
@@ -238,7 +242,13 @@ class Instance:
                 else:
                     proc = [proc_landing, proc_buffer_in, proc_gate, proc_buffer_out, proc_takeoff]
 
-        ETA_ready_diff_arr = np.random.uniform(low=config.ETA_ready_diff[0], high=config.ETA_ready_diff[1], size=config.num_vehicles)
+        if config.ETA_ready_diff[0] == config.ETA_ready_diff[1] == config.ETA_ready_diff[2]:
+            ETA_ready_diff_arr = config.ETA_ready_diff[0] * np.ones(config.num_vehicles)
+        else:
+            ETA_ready_diff_arr = config.ETA_ready_diff[0] + (config.ETA_ready_diff[1] - config.ETA_ready_diff[0])\
+                                 * np.random.beta(1.0 + config.lambda_beta_pert * (config.ETA_ready_diff[2] - config.ETA_ready_diff[0]) / (config.ETA_ready_diff[1] - config.ETA_ready_diff[0]),
+                                                  1.0 + config.lambda_beta_pert * (config.ETA_ready_diff[1] - config.ETA_ready_diff[2]) / (config.ETA_ready_diff[1] - config.ETA_ready_diff[0]),
+                                                  config.num_vehicles)
         vehicle_planned_arrival_times = ready + ETA_ready_diff_arr
         vehicle_planned_departure_times = vehicle_planned_arrival_times + TAT + config.ETD_margin
         vehicle_planned_gate_close_times = vehicle_planned_arrival_times + TAT + config.gate_close_margin
@@ -276,7 +286,7 @@ class Instance:
         return cls(
             config.seed, config.num_operations, config.num_vehicles, config.num_pad, config.num_buffer_in, config.num_gate,
             config.num_buffer_out, config.num_buffer, num_resource, config.objective_weights, config.proc_air_v, config.proc_air_r,
-            config.proc_air_o, config.proc_gate_v, st_list, config.ready_max, config.ETA_ready_diff, config.ETD_margin,
-            config.gate_close_margin, config.is_unified_buffer, ready, proc, vehicle_planned_arrival_times,
+            config.proc_air_o, config.proc_gate_v, st_list, config.ready_max, config.ETA_ready_diff, config.lambda_beta_pert,
+            config.ETD_margin, config.gate_close_margin, config.is_unified_buffer, ready, proc, vehicle_planned_arrival_times,
             vehicle_planned_departure_times, vehicle_planned_gate_close_times, ST_rounded, vehicle_type, M
         )

@@ -16,7 +16,7 @@ class ExperimentConfig:
     ])
     ETD_margin_exp: List[float] = field(default_factory=lambda: [3.0, 5.0])
     ETD_margin_minus_NED_exp: List[float] = field(default_factory=lambda: [1.0, 2.0])
-    ETA_ready_diff_range_exp: List[List[float]] = field(default_factory=lambda: [[2.0, 4.0], [0.0, 6.0], [-2.0, 8.0]])
+    ETA_ready_diff_range_exp: List[List[float]] = field(default_factory=lambda: [[-1.0, 4.0, 3.0], [-3.0, 6.0, 3.0], [-5.0, 8.0, 3.0]])
     is_unified_buffer_exp: List[bool] = field(default_factory=lambda: [True, False])
     scheduler_runtime_limit: float = 100.0  # in seconds
 
@@ -26,13 +26,13 @@ def _subfolder_name(num_vehicles, pads, buffers, gates, ETD_margin, GCM, ETA_rea
         return (f"instance_v{num_vehicles}_pad{pads}"
                 f"_buffer{buffers}"
                 f"_gate{gates}_ETD_margin{ETD_margin}"
-                f"_GCM{GCM}_ETA_ready_diff_range{ETA_ready_diff_range[0]}to{ETA_ready_diff_range[1]}_unified{unified}")
+                f"_GCM{GCM}_ETA_ready_diff_range{ETA_ready_diff_range[0]}to{ETA_ready_diff_range[1]}at{ETA_ready_diff_range[2]}_unified{unified}")
     else:
         return (f"instance_v{num_vehicles}_pad{pads}"
                 f"_bufferin{buffers}"
                 f"_bufferout{buffers}"
                 f"_gate{gates}_ETD_margin{ETD_margin}"
-                f"_GCM{GCM}_ETA_ready_diff_range{ETA_ready_diff_range[0]}to{ETA_ready_diff_range[1]}_unified{unified}")
+                f"_GCM{GCM}_ETA_ready_diff_range{ETA_ready_diff_range[0]}to{ETA_ready_diff_range[1]}at{ETA_ready_diff_range[2]}_unified{unified}")
 
 
 def _instance_filename(num_vehicles, instance, ETD_margin, ETA_ready_diff_range, unified, seed, prob_idx):
@@ -40,14 +40,14 @@ def _instance_filename(num_vehicles, instance, ETD_margin, ETA_ready_diff_range,
         return (f"instance_v{num_vehicles}_pad{instance.num_pad}"
                 f"_buffer{instance.num_buffer}"
                 f"_gate{instance.num_gate}_ETD_margin{ETD_margin}"
-                f"_GCM{instance.gate_close_margin}_ETA_ready_diff_range{ETA_ready_diff_range[0]}to{ETA_ready_diff_range[1]}"
+                f"_GCM{instance.gate_close_margin}_ETA_ready_diff_range{ETA_ready_diff_range[0]}to{ETA_ready_diff_range[1]}at{ETA_ready_diff_range[2]}"
                 f"_unified{unified}_seed{seed}_prob{prob_idx}.pkl")
     else:
         return (f"instance_v{num_vehicles}_pad{instance.num_pad}"
                 f"_bufferin{instance.num_buffer_in}"
                 f"_bufferout{instance.num_buffer_out}"
                 f"_gate{instance.num_gate}_ETD_margin{ETD_margin}"
-                f"_GCM{instance.gate_close_margin}_ETA_ready_diff_range{ETA_ready_diff_range[0]}to{ETA_ready_diff_range[1]}"
+                f"_GCM{instance.gate_close_margin}_ETA_ready_diff_range{ETA_ready_diff_range[0]}to{ETA_ready_diff_range[1]}at{ETA_ready_diff_range[2]}"
                 f"_unified{unified}_seed{seed}_prob{prob_idx}.pkl")
 
 
@@ -101,7 +101,7 @@ def Numerical_Experiment(exp_config: ExperimentConfig = ExperimentConfig()):
                                 num_gate=gates,
                                 ETD_margin=ETD_margin,
                                 gate_close_margin=GCM,
-                                ETA_ready_diff=[ETA_ready_diff_range[0], ETA_ready_diff_range[1]],
+                                ETA_ready_diff=[ETA_ready_diff_range[0], ETA_ready_diff_range[1], ETA_ready_diff_range[2]],
                                 is_unified_buffer=unified,
                                 seed=seed,
                             )
@@ -114,7 +114,7 @@ def Numerical_Experiment(exp_config: ExperimentConfig = ExperimentConfig()):
                                 num_gate=gates,
                                 ETD_margin=ETD_margin,
                                 gate_close_margin=GCM,
-                                ETA_ready_diff=[ETA_ready_diff_range[0], ETA_ready_diff_range[1]],
+                                ETA_ready_diff=[ETA_ready_diff_range[0], ETA_ready_diff_range[1], ETA_ready_diff_range[2]],
                                 is_unified_buffer=unified,
                                 seed=seed,
                             )

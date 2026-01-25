@@ -33,7 +33,8 @@ class ScenarioRHCConfig:
     st_list_o: List[float] = field(default_factory=lambda: [0.8, 0.6, 0.5, 1.0])
     st_list_r: List[float] = field(default_factory=lambda: [1.0, 0.7, 0.8, 1.0, 1.0, 0.7, 0.8, 1.0])
     ready_max: float = 100.0
-    ETA_ready_diff: List[float] = field(default_factory=lambda: [0.0, 6.0])
+    ETA_ready_diff: List[float] = field(default_factory=lambda: [-3.0, 6.0, 3.0])  # [lower, upper, mode] of beta distribution; for deterministic case, use [c, c, c]
+    lambda_beta_pert: float = 4.0
     ETD_margin: float = 5.0
     gate_close_margin: float = 3.0
     is_unified_buffer: bool = False
@@ -43,10 +44,14 @@ class ScenarioRHCConfig:
     update_interval: float = 1.0  # in minutes
     coe_bridge_from_update_interval: float = 1.0  # adjust ratio of update interval as a std of stochastic bridge
     operation_hour: int = 18
-    disturbance_proc: List[float] = field(default_factory=lambda: [0.5, 1.0, 0.5])  # half width of uniform distribution
-    disturbance_ready: float = 5.0  # half width of uniform distribution
+    disturbance_proc: Any = field(default_factory=lambda: [
+        [-0.2, 1.0, 0.2],
+        [-1.0, 3.0, 0.0],
+        [-0.2, 1.0, 0.2]
+    ])  # [lower, upper, mode] of beta distribution; for deterministic case, use [c, c, c] for each sublist
+    disturbance_ready: List[float] = field(default_factory=lambda: [-3.0, 10.0, 1.0])  # [lower, upper, mode] of beta distribution; for deterministic case, use [c, c, c]
     dynamic_arrival_v_id: List[int] = field(default_factory=lambda: [])
-    dynamic_arrival_aware_time_low: float = 5.0   # lower bound
+    dynamic_arrival_aware_time_low: float = 5.0   # lower bound; should be larger than update_interval
     dynamic_proc_v_id: List[int] = field(default_factory=lambda: [])
     dynamic_proc_op: List[int] = field(default_factory=lambda: [])
     dynamic_proc_inc_time: List[float] = field(default_factory=lambda: [])          # specifically defined by user
@@ -74,6 +79,7 @@ class Scenario:
         st_list: Any,
         maximum_arrival_time: float,
         ETA_ready_diff: List[float],
+        lambda_beta_pert: float,
         ETD_margin: float,
         gate_close_margin: float,
         is_unified_buffer: bool,
@@ -111,6 +117,7 @@ class Scenario:
         self.st_list = st_list
         self.maximum_arrival_time = maximum_arrival_time
         self.ETA_ready_diff = ETA_ready_diff # TODO : check if it needs?
+        self.lambda_beta_pert = lambda_beta_pert
         self.ETD_margin = ETD_margin # TODO : check if it needs?
         self.gate_close_margin = gate_close_margin
         self.is_unified_buffer = is_unified_buffer
@@ -226,7 +233,13 @@ class Scenario:
                 else:
                     proc = [proc_landing, proc_buffer_in, proc_gate, proc_buffer_out, proc_takeoff]
 
-        ETA_ready_diff_arr = np.random.uniform(low=config.ETA_ready_diff[0], high=config.ETA_ready_diff[1], size=num_vehicles)
+        if config.ETA_ready_diff[0] == config.ETA_ready_diff[1] == config.ETA_ready_diff[2]:
+            ETA_ready_diff_arr = config.ETA_ready_diff[0] * np.ones(num_vehicles)
+        else:
+            ETA_ready_diff_arr = config.ETA_ready_diff[0] + (config.ETA_ready_diff[1] - config.ETA_ready_diff[0])\
+                                 * np.random.beta(1.0 + config.lambda_beta_pert * (config.ETA_ready_diff[2] - config.ETA_ready_diff[0]) / (config.ETA_ready_diff[1] - config.ETA_ready_diff[0]),
+                                                  1.0 + config.lambda_beta_pert * (config.ETA_ready_diff[1] - config.ETA_ready_diff[2]) / (config.ETA_ready_diff[1] - config.ETA_ready_diff[0]),
+                                                  num_vehicles)
         vehicle_planned_arrival_times = ready + ETA_ready_diff_arr
         vehicle_planned_departure_times = vehicle_planned_arrival_times + TAT + config.ETD_margin
         vehicle_planned_gate_close_times = vehicle_planned_arrival_times + TAT + config.gate_close_margin
@@ -272,10 +285,10 @@ class Scenario:
             config.seed, config.num_operations, config.num_vehicles_per_hour, num_vehicles, vehicle_id, config.num_pad,
             config.num_buffer_in, config.num_gate, config.num_buffer_out, config.num_buffer, num_resource, config.objective_weights,
             config.proc_air_v, config.proc_air_r, config.proc_air_o, config.proc_gate_v, st_list, config.operation_hour * 60.0,
-            config.ETA_ready_diff, config.ETD_margin, config.gate_close_margin, config.is_unified_buffer, ready, ready, proc,
-            first_activated_time_of_ready, vehicle_planned_arrival_times, vehicle_planned_departure_times, vehicle_planned_gate_close_times,
-            ST_rounded, vehicle_type, M, whether_vehicle_dynamic_arrival, vehicle_dynamic_arrival_aware_time, proc,
-            config.coe_bridge_from_update_interval
+            config.ETA_ready_diff, config.lambda_beta_pert, config.ETD_margin, config.gate_close_margin, config.is_unified_buffer,
+            ready, ready, proc, first_activated_time_of_ready, vehicle_planned_arrival_times, vehicle_planned_departure_times,
+            vehicle_planned_gate_close_times, ST_rounded, vehicle_type, M, whether_vehicle_dynamic_arrival, vehicle_dynamic_arrival_aware_time,
+            proc, config.coe_bridge_from_update_interval
         )
 
 
@@ -285,11 +298,18 @@ class Scenario:
 
         ready = np.zeros(scenario_exp.num_vehicles)
         for i in range(scenario_exp.num_vehicles):
-            if scenario_exp.vehicle_arrival_times[i] <= config.scheduling_horizon_length:
-                disturbance_ready_ = config.disturbance_ready * scenario_exp.vehicle_arrival_times[i] / config.scheduling_horizon_length
-                ready[i] = max(scenario_exp.vehicle_arrival_times[i] + np.random.uniform(-disturbance_ready_, disturbance_ready_), 0.0)
+            if config.disturbance_ready[0] == config.disturbance_ready[1] == config.disturbance_ready[2]:
+                ready[i] = scenario_exp.vehicle_arrival_times[i] + config.disturbance_ready[0]
             else:
-                ready[i] = scenario_exp.vehicle_arrival_times[i] + np.random.uniform(-config.disturbance_ready, config.disturbance_ready)
+                if scenario_exp.vehicle_arrival_times[i] <= config.scheduling_horizon_length:
+                    disturbance_ready_ = [x * scenario_exp.vehicle_arrival_times[i] / config.scheduling_horizon_length for x in config.disturbance_ready]
+                    alpha_ready = 1.0 + config.lambda_beta_pert * (disturbance_ready_[2] - disturbance_ready_[0]) / (disturbance_ready_[1] - disturbance_ready_[0])
+                    beta_ready = 1.0 + config.lambda_beta_pert * (disturbance_ready_[1] - disturbance_ready_[2]) / (disturbance_ready_[1] - disturbance_ready_[0])
+                    ready[i] = max(scenario_exp.vehicle_arrival_times[i] + disturbance_ready_[0] + (disturbance_ready_[1] - disturbance_ready_[0]) * np.random.beta(alpha_ready, beta_ready), 0.0)
+                else:
+                    alpha_ready = 1.0 + config.lambda_beta_pert * (config.disturbance_ready[2] - config.disturbance_ready[0]) / (config.disturbance_ready[1] - config.disturbance_ready[0])
+                    beta_ready = 1.0 + config.lambda_beta_pert * (config.disturbance_ready[1] - config.disturbance_ready[2]) / (config.disturbance_ready[1] - config.disturbance_ready[0])
+                    ready[i] = scenario_exp.vehicle_arrival_times[i] + config.disturbance_ready[0] + (config.disturbance_ready[1] - config.disturbance_ready[0]) * np.random.beta(alpha_ready, beta_ready)
 
         proc_landing = np.zeros((scenario_exp.num_vehicles, scenario_exp.num_pad))
         proc_gate = np.zeros((scenario_exp.num_vehicles, scenario_exp.num_gate))
@@ -312,25 +332,41 @@ class Scenario:
 
         for i in range(scenario_exp.num_vehicles):
             for j in range(scenario_exp.num_pad):
-                proc_landing[i][j] = scenario_exp.proc[0][i][j] + np.random.uniform(-config.disturbance_proc[0], config.disturbance_proc[0])
-                proc_takeoff[i][j] = scenario_exp.proc[-1][i][j] + np.random.uniform(-config.disturbance_proc[2], config.disturbance_proc[2])
+                if config.disturbance_proc[0][0] == config.disturbance_proc[0][1] == config.disturbance_proc[0][2]:
+                    proc_landing[i][j] = scenario_exp.proc[0][i][j] + config.disturbance_proc[0][0]
+                else:
+                    alpha_landing = 1.0 + config.lambda_beta_pert * (config.disturbance_proc[0][2] - config.disturbance_proc[0][0]) / (config.disturbance_proc[0][1] - config.disturbance_proc[0][0])
+                    beta_landing = 1.0 + config.lambda_beta_pert * (config.disturbance_proc[0][1] - config.disturbance_proc[0][2]) / (config.disturbance_proc[0][1] - config.disturbance_proc[0][0])
+                    proc_landing[i][j] = scenario_exp.proc[0][i][j] + config.disturbance_proc[0][0] + (config.disturbance_proc[0][1] - config.disturbance_proc[0][0]) * np.random.beta(alpha_landing, beta_landing)
+                if config.disturbance_proc[2][0] == config.disturbance_proc[2][1] == config.disturbance_proc[2][2]:
+                    proc_takeoff[i][j] = scenario_exp.proc[-1][i][j] + config.disturbance_proc[2][0]
+                else:
+                    alpha_takeoff = 1.0 + config.lambda_beta_pert * (config.disturbance_proc[2][2] - config.disturbance_proc[2][0]) / (config.disturbance_proc[2][1] - config.disturbance_proc[2][0])
+                    beta_takeoff = 1.0 + config.lambda_beta_pert * (config.disturbance_proc[2][1] - config.disturbance_proc[2][2]) / (config.disturbance_proc[2][1] - config.disturbance_proc[2][0])
+                    proc_takeoff[i][j] = scenario_exp.proc[-1][i][j] + config.disturbance_proc[2][0] + (config.disturbance_proc[2][1] - config.disturbance_proc[2][0]) * np.random.beta(alpha_takeoff, beta_takeoff)
 
+        if config.disturbance_proc[1][0] == config.disturbance_proc[1][1] == config.disturbance_proc[1][2]:
+            disturbance_term_gate = config.disturbance_proc[1][0]
+        else:
+            alpha_gate = 1.0 + config.lambda_beta_pert * (config.disturbance_proc[1][2] - config.disturbance_proc[1][0]) / (config.disturbance_proc[1][1] - config.disturbance_proc[1][0])
+            beta_gate = 1.0 + config.lambda_beta_pert * (config.disturbance_proc[1][1] - config.disturbance_proc[1][2]) / (config.disturbance_proc[1][1] - config.disturbance_proc[1][0])
+            disturbance_term_gate = config.disturbance_proc[1][0] + (config.disturbance_proc[1][1] - config.disturbance_proc[1][0]) * np.random.beta(alpha_gate, beta_gate)
         if scenario_exp.is_unified_buffer:
             if scenario_exp.num_buffer == 0:
                 for i in range(scenario_exp.num_vehicles):
                     for j in range(scenario_exp.num_gate):
-                        proc_gate[i][j] = scenario_exp.proc[1][i][j] + np.random.uniform(-config.disturbance_proc[1], config.disturbance_proc[1])
+                        proc_gate[i][j] = scenario_exp.proc[1][i][j] + disturbance_term_gate
                 proc = [proc_landing, proc_gate, proc_takeoff]
             else:
                 for i in range(scenario_exp.num_vehicles):
                     for j in range(scenario_exp.num_gate):
-                        proc_gate[i][j] = scenario_exp.proc[2][i][j] + np.random.uniform(-config.disturbance_proc[1], config.disturbance_proc[1])
+                        proc_gate[i][j] = scenario_exp.proc[2][i][j] + disturbance_term_gate
                 proc = [proc_landing, proc_buffer, proc_gate, proc_buffer, proc_takeoff]
         else:
             if scenario_exp.num_buffer_in == 0:
                 for i in range(scenario_exp.num_vehicles):
                     for j in range(scenario_exp.num_gate):
-                        proc_gate[i][j] = scenario_exp.proc[1][i][j] + np.random.uniform(-config.disturbance_proc[1], config.disturbance_proc[1])
+                        proc_gate[i][j] = scenario_exp.proc[1][i][j] + disturbance_term_gate
                 if scenario_exp.num_buffer_out == 0:
                     proc = [proc_landing, proc_gate, proc_takeoff]
                 else:
@@ -338,7 +374,7 @@ class Scenario:
             else:
                 for i in range(scenario_exp.num_vehicles):
                     for j in range(scenario_exp.num_gate):
-                        proc_gate[i][j] = scenario_exp.proc[2][i][j] + np.random.uniform(-config.disturbance_proc[1], config.disturbance_proc[1])
+                        proc_gate[i][j] = scenario_exp.proc[2][i][j] + disturbance_term_gate
                 if scenario_exp.num_buffer_out == 0:
                     proc = [proc_landing, proc_buffer_in, proc_gate, proc_takeoff]
                 else:
@@ -353,10 +389,10 @@ class Scenario:
             scenario_exp.vehicle_id, scenario_exp.num_pad, scenario_exp.num_buffer_in, scenario_exp.num_gate, scenario_exp.num_buffer_out,
             scenario_exp.num_buffer, scenario_exp.num_resource, scenario_exp.objective_weights, scenario_exp.proc_air_v,
             scenario_exp.proc_air_r, scenario_exp.proc_air_o, scenario_exp.proc_gate_v, scenario_exp.st_list, config.operation_hour * 60.0,
-            scenario_exp.ETA_ready_diff, scenario_exp.ETD_margin, scenario_exp.gate_close_margin, scenario_exp.is_unified_buffer,
-            ready, ready, proc, scenario_exp.first_activated_time_of_ready, scenario_exp.vehicle_planned_arrival_times,
-            scenario_exp.vehicle_planned_departure_times, scenario_exp.vehicle_planned_gate_close_times, scenario_exp.ST,
-            scenario_exp.vehicle_type, scenario_exp.big_M, scenario_exp.whether_vehicle_dynamic_arrival,
+            scenario_exp.ETA_ready_diff, scenario_exp.lambda_beta_pert, scenario_exp.ETD_margin, scenario_exp.gate_close_margin,
+            scenario_exp.is_unified_buffer, ready, ready, proc, scenario_exp.first_activated_time_of_ready,
+            scenario_exp.vehicle_planned_arrival_times, scenario_exp.vehicle_planned_departure_times, scenario_exp.vehicle_planned_gate_close_times,
+            scenario_exp.ST, scenario_exp.vehicle_type, scenario_exp.big_M, scenario_exp.whether_vehicle_dynamic_arrival,
             scenario_exp.vehicle_dynamic_arrival_aware_time, proc_real, scenario_exp.coe_bridge_from_update_interval
         )
 
@@ -469,10 +505,10 @@ class Scenario:
             scenario_exp.seed, scenario_exp.num_operations, len(activated_vehicle_id_exp), scenario_exp.num_pad, scenario_exp.num_buffer_in,
             scenario_exp.num_gate, scenario_exp.num_buffer_out, scenario_exp.num_buffer, scenario_exp.num_resource, scenario_exp.objective_weights,
             scenario_exp.proc_air_v, scenario_exp.proc_air_r, scenario_exp.proc_air_o, scenario_exp.proc_gate_v, scenario_exp.st_list,
-            scenario_exp.maximum_arrival_time, scenario_exp.ETA_ready_diff, scenario_exp.ETD_margin, scenario_exp.gate_close_margin,
-            scenario_exp.is_unified_buffer, ready_in_horizon_exp, proc_in_horizon, vehicle_planned_arrival_times_in_horizon,
-            vehicle_planned_departure_times_in_horizon, vehicle_planned_gate_close_times_in_horizon, ST_rounded_in_horizon,
-            vehicle_type_in_horizon, scenario_exp.big_M
+            scenario_exp.maximum_arrival_time, scenario_exp.ETA_ready_diff, scenario_exp.lambda_beta_pert, scenario_exp.ETD_margin,
+            scenario_exp.gate_close_margin, scenario_exp.is_unified_buffer, ready_in_horizon_exp, proc_in_horizon,
+            vehicle_planned_arrival_times_in_horizon, vehicle_planned_departure_times_in_horizon, vehicle_planned_gate_close_times_in_horizon,
+            ST_rounded_in_horizon, vehicle_type_in_horizon, scenario_exp.big_M
         ), activated_vehicle_id_exp, ready_in_horizon_vehicle_id_exp
 
     @classmethod
@@ -525,8 +561,8 @@ class Scenario:
             scenario_true.seed, scenario_true.num_operations, len(activated_vehicle_id_true), scenario_true.num_pad, scenario_true.num_buffer_in,
             scenario_true.num_gate, scenario_true.num_buffer_out, scenario_true.num_buffer, scenario_true.num_resource, scenario_true.objective_weights,
             scenario_true.proc_air_v, scenario_true.proc_air_r, scenario_true.proc_air_o, scenario_true.proc_gate_v, scenario_true.st_list,
-            scenario_true.maximum_arrival_time, scenario_true.ETA_ready_diff, scenario_true.ETD_margin, scenario_true.gate_close_margin,
-            scenario_true.is_unified_buffer, ready_in_horizon, proc_in_horizon, vehicle_planned_arrival_times_in_horizon,
-            vehicle_planned_departure_times_in_horizon, vehicle_planned_gate_close_times_in_horizon, ST_rounded_in_horizon,
-            vehicle_type_in_horizon, scenario_true.big_M
+            scenario_true.maximum_arrival_time, scenario_true.ETA_ready_diff, scenario_true.lambda_beta_pert, scenario_true.ETD_margin,
+            scenario_true.gate_close_margin, scenario_true.is_unified_buffer, ready_in_horizon, proc_in_horizon,
+            vehicle_planned_arrival_times_in_horizon, vehicle_planned_departure_times_in_horizon, vehicle_planned_gate_close_times_in_horizon,
+            ST_rounded_in_horizon, vehicle_type_in_horizon, scenario_true.big_M
         ), activated_vehicle_id_true
