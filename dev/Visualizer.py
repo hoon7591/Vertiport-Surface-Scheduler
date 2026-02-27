@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import numpy as np
 import plotly.graph_objects as go
+from pathlib import Path
 
 
 def _get_operation_display_info(is_unified_buffer, num_buffer_in, num_buffer_out, num_buffer):
@@ -38,6 +39,7 @@ def visualize_gantt(solution, vehicle_ids, *arg):
     arg[1]: List of Processing Vehicles Operation IDs to Skip for Visualization
     arg[2]: Filename Suffix for Saving the Figure (Current Time)
     arg[3]: Visualization Mode ('show' or 'save')
+    arg[4]: Path to Save the Figure (if mode is 'save')
     """
 
     # Use solution's enhanced data instead of extracting from instance
@@ -247,9 +249,14 @@ def visualize_gantt(solution, vehicle_ids, *arg):
     if arg[3] == 'show':
         plt.show()
     elif arg[3] == 'save':
-        plt.savefig(f'{solver_type}_{arg[2]}.pdf', dpi=300)
-        plt.close()
-        print(f"Saved interactive Gantt to {solver_type}_{arg[2]}.pdf")
+        if len(arg) >= 5:
+            plt.savefig(arg[4] / f'{solver_type}_{solution.objective_option}_{arg[2]}.pdf', dpi=300)
+            plt.close()
+            print(f"Saved interactive Gantt to {solver_type}_{solution.objective_option}_{arg[2]}.pdf")
+        else:
+            plt.savefig(f'{solver_type}_{solution.objective_option}_{arg[2]}.pdf', dpi=300)
+            plt.close()
+            print(f"Saved interactive Gantt to {solver_type}_{solution.objective_option}_{arg[2]}.pdf")
 
 
 def visualize_gantt_plotly(
@@ -259,7 +266,8 @@ def visualize_gantt_plotly(
     skip_vehicle_ops=None,
     filename_suffix="0.0",
     mode="show",              # "show" or "save"
-    current_time=None         # optional vertical line for RHC time
+    current_time=None,        # optional vertical line for RHC time
+    path=None
 ):
     """
     Plot an interactive resource-centric Gantt chart using Plotly.
@@ -638,9 +646,14 @@ def visualize_gantt_plotly(
     if mode == "show":
         fig.show()
     elif mode == "save":
-        out_name = f"{solution.solver_type}_{filename_suffix}.html"
-        fig.write_html(out_name)
-        print(f"Saved interactive Gantt to {out_name}")
+        if path is not None:
+            out_name = f"{solution.solver_type}_{solution.objective_option}_{filename_suffix}.html"
+            fig.write_html(path / out_name)
+            print(f"Saved interactive Gantt to {out_name}")
+        else:
+            out_name = f"{solution.solver_type}_{solution.objective_option}_{filename_suffix}.html"
+            fig.write_html(out_name)
+            print(f"Saved interactive Gantt to {out_name}")
 
 
 def visualize_top5_vehicle_wise_delay(solution, vehicle_ids):

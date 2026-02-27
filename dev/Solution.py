@@ -254,7 +254,7 @@ class Solution:
     def get_summary_stats(self) -> Dict[str, float]:
         """Get summary statistics for the solution"""
         stats = {
-            'objective_value': self.obj_val,
+            'weighted_sum_tardiness': self.weights[0] * self.total_arrival_tardiness + self.weights[1] * self.total_departure_tardiness,
             'runtime_seconds': self.solver_runtime,
             'total_arrival_tardiness': self.total_arrival_tardiness,
             'total_departure_tardiness': self.total_departure_tardiness,
@@ -266,8 +266,10 @@ class Solution:
             'max_departure_tardiness': self.max_departure_tardiness,
             'sum_of_max_tardiness': self.max_arrival_tardiness + self.max_departure_tardiness,
             'max_vehicle_wise_tardiness': self.max_vehicle_wise_tardiness,
+            'std_vehicle_wise_tardiness': self.std_vehicle_wise_tardiness,
             'total_vehicles': self.num_vehicles if self.num_vehicles is not None else 0,
             'solver': self.solver_type,
+            'objective_option': self.objective_option if self.objective_option is not None else '',
             'simulation_end_time': self.sim_end_time,
         }
         

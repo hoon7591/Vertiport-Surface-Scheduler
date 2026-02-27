@@ -71,7 +71,7 @@ class InstanceConfig:
     proc_air_v: List[float] = field(default_factory=lambda: [2.0, 2.2, 2.8, 3.0])
     proc_air_r: List[float] = field(default_factory=lambda: [0.8, 0.9, 1.0, 1.0, 0.8, 0.9, 1.0, 1.0])
     proc_air_o: List[float] = field(default_factory=lambda: [1.2, 1.0])
-    proc_gate_v: List[int] = field(default_factory=lambda: [15, 17, 23, 25])
+    proc_gate_v: List[float] = field(default_factory=lambda: [15.0, 17.0, 23.0, 25.0])
     st_list_v: Any = field(default_factory=lambda: [
         [1.25, 1.0, 1.0, 1.0],
         [1.5, 1.25, 1.0, 1.0],
@@ -81,7 +81,7 @@ class InstanceConfig:
     st_list_o: List[float] = field(default_factory=lambda: [0.8, 0.6, 0.5, 1.0])
     st_list_r: List[float] = field(default_factory=lambda: [1.0, 0.7, 0.8, 1.0, 1.0, 0.7, 0.8, 1.0])
     ready_max: float = 100.0
-    ETA_ready_diff: List[float] = field(default_factory=lambda: [-3.0, 6.0, 3.0])
+    ETA_ready_diff: List[float] = field(default_factory=lambda: [5.0, 5.0, 5.0])  # [lower, upper, mode] of beta distribution; for deterministic case, use [c, c, c]
     lambda_beta_pert: float = 4.0
     ETD_margin: float = 5.0
     gate_close_margin: float = 3.0

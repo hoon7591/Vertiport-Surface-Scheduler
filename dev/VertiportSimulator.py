@@ -1157,6 +1157,7 @@ class VertiportSimulator:
     def _generate_solution(self, runtime, is_deadlock, is_runtime_over, solver_type, **kwargs) -> Solution:
         """Generate Solution object from simulation results"""
         obj_option = kwargs.get("obj_option", "weighted_sum")
+        next_current_time = kwargs.get("next_current_time", None)
         num_vehicles = self.instance.num_vehicles
         num_operations = self.instance.num_operations
         weights = self.instance.objective_weights

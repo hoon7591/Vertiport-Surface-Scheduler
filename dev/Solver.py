@@ -1,5 +1,4 @@
 import time
-import random
 from abc import ABC, abstractmethod
 from gurobipy import GRB, Model, quicksum
 import numpy as np
@@ -401,6 +400,34 @@ class ExactSolver(SolverStrategy):
             model.setObjectiveN(quicksum(weights[0] * T_a[i] + weights[1] * T_d[i] for i in range(num_vehicle)),
                                 index=1, priority=1)
 
+        # # vehicle-wise max value of weighted sum of arrival delay and departure delay
+        # elif obj_option == "vehicle_wise_max":
+        #     lambda_ = 1e-04
+        #     max_T_v_wise = model.addVar(vtype=GRB.CONTINUOUS, lb=0, name="max_T_v_wise")
+        #     for i in range(num_vehicle):
+        #         model.addConstr(max_T_v_wise >= weights[0] * T_a[i] + weights[1] * T_d[i])
+        #     model.setObjective(
+        #         max_T_v_wise + lambda_ * quicksum(
+        #             weights[0] * T_a[i] + weights[1] * T_d[i] for i in range(num_vehicle)
+        #         ),
+        #         GRB.MINIMIZE,
+        #     )
+        #
+        # # weighted sum of max value of arrival delay and departure delay
+        # elif obj_option == "weighted_sum_of_max":
+        #     lambda_ = 1e-04
+        #     max_T_a = model.addVar(vtype=GRB.CONTINUOUS, lb=0, name="max_T_a")
+        #     max_T_d = model.addVar(vtype=GRB.CONTINUOUS, lb=0, name="max_T_d")
+        #     for i in range(num_vehicle):
+        #         model.addConstr(max_T_a >= T_a[i])
+        #         model.addConstr(max_T_d >= T_d[i])
+        #     model.setObjective(
+        #         weights[0] * max_T_a + weights[1] * max_T_d + lambda_ * quicksum(
+        #             weights[0] * T_a[i] + weights[1] * T_d[i] for i in range(num_vehicle)
+        #         ),
+        #         GRB.MINIMIZE,
+        #     )
+
         # 🔹 RHC 모드일 때만, 현재 처리 중인 작업을 horizon_start 에 고정
         if is_rhc:
             S, y = variables["S"], variables["y"]
@@ -582,6 +609,10 @@ class FCFS_HeuristicSolver(SolverStrategy):
         while not simulator.is_simulation_complete():
             event = simulator.step_to_next_event()
 
+            if event is None and simulator.is_simulation_complete() is False and is_numerical_exp:
+                is_deadlock = True
+                break
+
             # FCFS scheduling logic here - TODO : improve more - multiple vehicles and multiple resources
             for operation in range(instance.num_operations):
                 waiting_vehicles = simulator.get_waiting_vehicles(operation)
@@ -613,10 +644,6 @@ class FCFS_HeuristicSolver(SolverStrategy):
                         if break_flag:
                             break
 
-            if event is None and simulator.is_simulation_complete() is False and is_numerical_exp:
-                is_deadlock = True
-                break
-
         solve_end_time = time.time()
         runtime = solve_end_time - solve_start_time
 
@@ -634,6 +661,10 @@ class FCFS_HeuristicRandomSolver(SolverStrategy):
         solve_start_time = time.time()
         while not simulator.is_simulation_complete():
             event = simulator.step_to_next_event()
+
+            if event is None and simulator.is_simulation_complete() is False and is_numerical_exp:
+                is_deadlock = True
+                break
 
             # FCFS scheduling logic here - TODO : improve more - multiple vehicles and multiple resources
             for operation in range(instance.num_operations):
@@ -667,10 +698,6 @@ class FCFS_HeuristicRandomSolver(SolverStrategy):
                         if break_flag:
                             break
 
-            if event is None and simulator.is_simulation_complete() is False and is_numerical_exp:
-                is_deadlock = True
-                break
-
         solve_end_time = time.time()
         runtime = solve_end_time - solve_start_time
 
@@ -683,6 +710,8 @@ class RunRHC(SolverStrategy):
         planned_operation_start_times = kwargs["planned_operation_start_times"]
         vehicle_original_id = kwargs["vehicle_original_id"]
         obj_option = kwargs.get("obj_option", "weighted_sum")
+        next_current_time = kwargs["next_current_time"]
+        past_event_time = 0.0
 
         # Create simulator
         simulator = VertiportSimulatorRecedingHorizon(instance, is_numerical_exp)
@@ -693,6 +722,10 @@ class RunRHC(SolverStrategy):
         solve_start_time = time.time()
         while not simulator.is_simulation_complete():
             event = simulator.step_to_next_event()
+
+            if event is None and simulator.is_simulation_complete() is False and is_numerical_exp and past_event_time >= next_current_time:
+                is_deadlock = True
+                break
 
             # RunRHC logic here - TODO : improve more - multiple vehicles and multiple resources
             for operation in range(instance.num_operations):
@@ -797,14 +830,12 @@ class RunRHC(SolverStrategy):
                         if break_flag:
                             break
 
-            if event is None and simulator.is_simulation_complete() is False and is_numerical_exp:
-                is_deadlock = True
-                break
+            past_event_time = event.time
 
         solve_end_time = time.time()
         runtime = solve_end_time - solve_start_time
 
-        return simulator._generate_solution(runtime, is_deadlock, is_runtime_over, solver_type="run_RHC", obj_option=obj_option)
+        return simulator._generate_solution(runtime, is_deadlock, is_runtime_over, solver_type="run_RHC", obj_option=obj_option, next_current_time=next_current_time)
 
 
 # Solver factory with minimal overhead
