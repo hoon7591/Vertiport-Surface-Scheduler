@@ -66,19 +66,22 @@ if __name__ == "__main__":
     # # config = InstanceConfig(is_unified_buffer=True, num_vehicles=9, num_buffer=3, num_gate=9, num_pad=3, ready_max=8)
     # instance = generate_instance(config)
 
+
     #################### Solver Execution for Single Instance ####################
     # solution = solve(instance, solver="exact", is_numerical_exp=True, obj_option="weighted_sum")
     # visualize_gantt(solution, list(range(instance.num_vehicles)), [], [], None, 'show')
     # visualize_top5_vehicle_wise_delay(solution, list(range(instance.num_vehicles)))
 
+
     #################### Numerical Study for Deterministic Single Horizon Cases ####################
-    # exp_config = ExperimentConfig(num_vehicles_pad_buffer_gate_exp=[[12, 16, 2, 8], [18, 24, 3, 12], [24, 32, 4, 16]],
+    # exp_config = ExperimentConfig(num_vehicles_pad_buffer_gate_exp=[[30, 3, 12], [32, 40, 4, 16]],
     #                               proc_gate_v_exp=[[15.0, 17.0, 23.0, 25.0], [5.0, 6.0, 9.0, 10.0]],
     #                               ETD_margin_exp=[5.0], gate_close_margin_exp=[3.0],
     #                               ETA_ready_diff_range_exp=[[5.0, 5.0, 5.0]],
     #                               is_unified_buffer_exp=[True], ready_max=100.0,
     #                               scheduler_runtime_limit=100.0, iter=300)
     # Numerical_Experiment(exp_config)
+
 
     #################### Scenario Generation ####################
     ### For test of Run_RHC by setting disturbance as zero (same results between run and solve are expected) ###
@@ -105,6 +108,7 @@ if __name__ == "__main__":
     #                                         dynamic_proc_inc_time=[10.0, 15.0, 10.0, 5.0, 7.0, 20.0])
     # scenario_exp = Scenario.from_scenario_config_exp(scenario_RHC_config)
     # scenario_true = Scenario.from_scenario_config_true(scenario_RHC_config, scenario_exp)
+
 
     #################### RHC Test ####################
     # instance_from_scenario_exp = None
@@ -158,21 +162,33 @@ if __name__ == "__main__":
     # solution = solve(instance_from_scenario_exp, solver="exact_RHC", is_numerical_exp=False, processing_vehicles_op=[0, 0, 3, 2, 2, 2, 2, 2], processing_vehicles_res=[0, 1, 3, 5, 6, 7, 8, 9], horizon_start=40.0, obj_option="weighted_sum")
     # visualize_gantt(solution, activated_vehicle_id_exp, [42, 145, 72, 98, 171, 237, 10, 100], [0, 0, 3, 2, 2, 2, 2, 2], None, 'show')
 
-    ### For Debugging of RHC Implementation ###
-    # with open('instance_true_899.0.pkl', 'rb') as file:
+    ### For Debugging of RHC Implementation (run) ###
+    # with open('log_data/instance_true_574.0.pkl', 'rb') as file:
     #     instance_from_scenario_true = pickle.load(file)
-    # with open('RHC_info_899.0.pkl', 'rb') as file:
+    # with open('log_data/RHC_info_574.0.pkl', 'rb') as file:
     #     RHC_info = pickle.load(file)
     # solution = solve(instance_from_scenario_true, solver="run_RHC", is_numerical_exp=True,
     #                  planned_resource_assignment=RHC_info["all_assigned_resources_run"],
     #                  planned_operation_start_times=RHC_info["all_start_times_run"],
     #                  vehicle_original_id=RHC_info["activated_vehicle_id_true"],
-    #                  next_current_time=900.0)
+    #                  next_current_time=576.0)
     # # visualize_gantt(solution, activated_vehicle_id_true, [], [], None, 'show')
-    # visualize_gantt_plotly(solution, RHC_info["activated_vehicle_id_true"], [], [], None, 'show')
+    # visualize_gantt_plotly(solution, RHC_info["activated_vehicle_id_true"], [], [], None, 'show', 574.0)
+
+    ## For Debugging of RHC Implementation (schedule) ###
+    # with open('log_data/instance_exp_576.0.pkl', 'rb') as file:
+    #     instance_from_scenario_exp = pickle.load(file)
+    # with open('log_data/RHC_info_574.0.pkl', 'rb') as file:
+    #     RHC_info = pickle.load(file)
+    # solution = solve(instance_from_scenario_exp, solver="exact", is_numerical_exp=True,
+    #                  processing_vehicles_op=RHC_info["processing_vehicles_op"], processing_vehicles_res=RHC_info["processing_vehicles_res"],
+    #                  horizon_start=576.0, obj_option="vehicle_wise_max", scheduler_runtime_limit=10.0)
+    # # visualize_gantt(solution, activated_vehicle_id_true, [], [], None, 'show')
+    # visualize_gantt_plotly(solution, instance_from_scenario_exp, [], [], None, 'show', 576.0)
 
     ### RHC Execution (obj_option: "weighted_sum", "vehicle_wise_max", "weighted_sum_of_max") ###
     # final_solution = RHC(scenario_RHC_config, scenario_exp, scenario_true, obj_option="vehicle_wise_max", is_file_gen=True, is_result_file_gen=True, scheduler_runtime_limit=10.0, result_dir=None)
+
 
     #################### Numerical Study for Stochastic Full-Day Multi-Horizon Cases ####################
     exp_RHC_config = ExperimentRHCConfig(num_vehicles_pad_buffer_gate_exp=[[12, 2, 8], [18, 3, 12], [24, 4, 16]],

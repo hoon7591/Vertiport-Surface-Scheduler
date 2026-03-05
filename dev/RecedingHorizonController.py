@@ -1,4 +1,6 @@
 import copy
+import time
+
 from Scenario import ScenarioRHCConfig, Scenario
 from Solver import solve
 from Solution import Solution
@@ -36,6 +38,8 @@ def RHC(scenario_RHC_config, scenario_exp, scenario_true, obj_option, is_file_ge
     log_data_dir = Path("log_data")
     log_data_dir.mkdir(parents=True, exist_ok=True)
 
+    final_solution = None
+
     while True:
         print(f'\nCurrent Time: {current_time}\n')
 
@@ -52,6 +56,13 @@ def RHC(scenario_RHC_config, scenario_exp, scenario_true, obj_option, is_file_ge
         solution_schedule = solve(instance_from_scenario_exp, solver="exact", is_numerical_exp=True,
                                   processing_vehicles_op=processing_vehicles_op, processing_vehicles_res=processing_vehicles_res,
                                   horizon_start=current_time, obj_option=obj_option, scheduler_runtime_limit=scheduler_runtime_limit)
+        if solution_schedule.is_solution_exist is False:
+            print(f"Scheduling at time {current_time} exceeded runtime limit of {scheduler_runtime_limit} seconds. Reschedule that instance.")
+            time.sleep(np.random.uniform(10.0, 30.0))
+            continue
+        if solution_schedule.is_infeasible is True:
+            print(f"Scheduling at time {current_time} is infeasible. Restart RHC for that scenario")
+            break
 
         if is_file_gen:
             path = log_data_dir / f"solution_schedule_{current_time}.pkl"

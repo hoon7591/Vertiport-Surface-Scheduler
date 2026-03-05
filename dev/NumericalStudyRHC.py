@@ -122,6 +122,8 @@ def Numerical_Experiment_RHC(exp_config: ExperimentRHCConfig = ExperimentRHCConf
          exp_config.scheduling_horizon_length_exp[2], exp_config.update_interval_exp[0]],
     ]
 
+    num_is_infeasible_true = 0
+
     for cfg_list in exp_config.num_vehicles_pad_buffer_gate_exp:
         pads = cfg_list[-2]
         gates = cfg_list[-1]
@@ -254,6 +256,7 @@ def Numerical_Experiment_RHC(exp_config: ExperimentRHCConfig = ExperimentRHCConf
                         "update_interval": update_interval,
                         "is_unified_buffer": True,
                         "seed": seed,
+                        "num_is_infeasible_true": num_is_infeasible_true,  # Add infeasibility count to stats
                     })
                     results.append(stats)
 
@@ -290,6 +293,7 @@ def Numerical_Experiment_RHC(exp_config: ExperimentRHCConfig = ExperimentRHCConf
                         "update_interval": update_interval,
                         "is_unified_buffer": True,
                         "seed": seed,
+                        "num_is_infeasible_true": num_is_infeasible_true,  # Add infeasibility count to stats
                     })
                     results.append(stats)
 
@@ -299,17 +303,21 @@ def Numerical_Experiment_RHC(exp_config: ExperimentRHCConfig = ExperimentRHCConf
                     # -------------------------
                     # RHC (weighted_sum)
                     # -------------------------
-                    scenario_exp, scenario_true = load_scenarios(scenario_exp_path, scenario_true_path, seed)
-                    solution = RHC(
-                        scenario_RHC_config,
-                        scenario_exp,
-                        scenario_true,
-                        obj_option="weighted_sum",
-                        is_file_gen=True,
-                        is_result_file_gen=True,
-                        scheduler_runtime_limit=10.0,
-                        result_dir=result_dir
-                    )
+                    solution = None
+                    while solution is None:
+                        scenario_exp, scenario_true = load_scenarios(scenario_exp_path, scenario_true_path, seed)
+                        solution = RHC(
+                            scenario_RHC_config,
+                            scenario_exp,
+                            scenario_true,
+                            obj_option="weighted_sum",
+                            is_file_gen=True,
+                            is_result_file_gen=True,
+                            scheduler_runtime_limit=10.0,
+                            result_dir=result_dir
+                        )
+                        if solution is None:
+                            num_is_infeasible_true += 1
                     stats = solution.get_summary_stats()
 
                     if max(proc_gate_v) <= 10.0:
@@ -329,6 +337,7 @@ def Numerical_Experiment_RHC(exp_config: ExperimentRHCConfig = ExperimentRHCConf
                         "update_interval": update_interval,
                         "is_unified_buffer": True,
                         "seed": seed,
+                        "num_is_infeasible_true": num_is_infeasible_true,  # Add infeasibility count to stats
                     })
 
                     _append_csv_rows(csv_path, [stats])
@@ -336,17 +345,21 @@ def Numerical_Experiment_RHC(exp_config: ExperimentRHCConfig = ExperimentRHCConf
                     # -------------------------
                     # RHC (vehicle_wise_max)
                     # -------------------------
-                    scenario_exp, scenario_true = load_scenarios(scenario_exp_path, scenario_true_path, seed)
-                    solution = RHC(
-                        scenario_RHC_config,
-                        scenario_exp,
-                        scenario_true,
-                        obj_option="vehicle_wise_max",
-                        is_file_gen=True,
-                        is_result_file_gen=True,
-                        scheduler_runtime_limit=10.0,
-                        result_dir=result_dir
-                    )
+                    solution = None
+                    while solution is None:
+                        scenario_exp, scenario_true = load_scenarios(scenario_exp_path, scenario_true_path, seed)
+                        solution = RHC(
+                            scenario_RHC_config,
+                            scenario_exp,
+                            scenario_true,
+                            obj_option="vehicle_wise_max",
+                            is_file_gen=True,
+                            is_result_file_gen=True,
+                            scheduler_runtime_limit=10.0,
+                            result_dir=result_dir
+                        )
+                        if solution is None:
+                            num_is_infeasible_true += 1
                     stats = solution.get_summary_stats()
 
                     if max(proc_gate_v) <= 10.0:
@@ -366,6 +379,7 @@ def Numerical_Experiment_RHC(exp_config: ExperimentRHCConfig = ExperimentRHCConf
                         "update_interval": update_interval,
                         "is_unified_buffer": True,
                         "seed": seed,
+                        "num_is_infeasible_true": num_is_infeasible_true,  # Add infeasibility count to stats
                     })
 
                     results.append(stats)

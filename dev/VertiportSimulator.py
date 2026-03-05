@@ -1161,7 +1161,32 @@ class VertiportSimulator:
         num_vehicles = self.instance.num_vehicles
         num_operations = self.instance.num_operations
         weights = self.instance.objective_weights
-        
+
+        is_unified_buffer = self.instance.is_unified_buffer
+        num_pad = self.instance.num_pad
+        num_buffer_in = self.instance.num_buffer_in
+        num_gate = self.instance.num_gate
+        num_buffer_out = self.instance.num_buffer_out
+        num_buffer = self.instance.num_buffer
+
+        buffer_ids = []
+        if is_unified_buffer:
+            if num_buffer == 0:
+                pass
+            else:
+                buffer_ids = list(range(num_pad, num_pad + num_buffer))
+        else:
+            if num_buffer_in == 0:
+                if num_buffer_out == 0:
+                    pass
+                else:
+                    buffer_ids = list(range(num_pad + num_gate, num_pad + num_gate + num_buffer_out))
+            else:
+                if num_buffer_out == 0:
+                    buffer_ids = list(range(num_pad, num_pad + num_buffer_in))
+                else:
+                    buffer_ids = list(range(num_pad, num_pad + num_buffer_in)) + list(range(num_pad + num_buffer_in + num_gate, num_pad + num_buffer_in + num_gate + num_buffer_out))
+
         # Initialize arrays
         start_times = np.zeros((num_vehicles, num_operations))
         finish_times = np.zeros((num_vehicles, num_operations))
@@ -1173,15 +1198,15 @@ class VertiportSimulator:
         for vehicle in self.vehicles.values():
             v_id = vehicle.id
             if len(vehicle.log_start_times) != 5:
-                middle_indices = [
-                    i + 1
-                    for i in range(len(vehicle.log_start_times) - 2)
-                    if vehicle.log_start_times[i] == vehicle.log_start_times[i + 1] == vehicle.log_start_times[i + 2]
+                delete_indices = [
+                    i
+                    for i in range(len(vehicle.log_start_times) - 1)
+                    if vehicle.log_assigned_resources[i] in buffer_ids and vehicle.log_assigned_resources[i + 1] in buffer_ids
                 ]
-                for idx in sorted(middle_indices, reverse=True):
-                    vehicle.log_start_times.pop(idx)
-                    vehicle.log_operation_finish_times.pop(idx)
-                    vehicle.log_assigned_resources.pop(idx)
+                delete_indices_set = set(delete_indices)
+                vehicle.log_start_times = [x for i, x in enumerate(vehicle.log_start_times) if i not in delete_indices_set]
+                vehicle.log_operation_finish_times = [x for i, x in enumerate(vehicle.log_operation_finish_times) if i not in delete_indices_set]
+                vehicle.log_assigned_resources = [x for i, x in enumerate(vehicle.log_assigned_resources) if i not in delete_indices_set]
             for op in range(min(len(vehicle.log_start_times), num_operations)):
                 start_times[v_id, op] = vehicle.log_start_times[op]
                 finish_times[v_id, op] = vehicle.log_operation_finish_times[op]
@@ -1220,6 +1245,8 @@ class VertiportSimulator:
             instance=self.instance,
             is_deadlock=is_deadlock,
             is_runtime_over=is_runtime_over,
+            is_infeaisible=False,  # There is no notion of infeasibility in the simulation
+            is_solution_exist=not is_deadlock and not is_runtime_over,
             objective_option=obj_option
         )
 

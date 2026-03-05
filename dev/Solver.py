@@ -277,6 +277,7 @@ class SolverStrategy(ABC):
             solver_name: str,
             is_deadlock,
             is_runtime_over,
+            is_rhc,
             **kwargs,
     ) -> Solution:
         """Extract solution from the solved model."""
@@ -300,23 +301,34 @@ class SolverStrategy(ABC):
 
         obj_val = model.ObjVal if hasattr(model, 'ObjVal') else 0
         runtime = model.Runtime if hasattr(model, 'Runtime') else 0
+        sim_end_time = 0
 
-        for i in range(num_vehicle):
-            arrival_time_tardiness[i] = T_a[i].X
-            departure_time_tardiness[i] = T_d[i].X
-            for j in range(num_ops):
-                start_times[i, j] = S[j, i].X
-                finish_times[i, j] = start_times[i, j]
-                for k in range(resource_ind[j][0], resource_ind[j][1]):
-                    if y[j, i, k].X >= 0.5:
-                        finish_times[i, j] += proc[j][i][k - resource_ind[j][0]]
-                        assigned_resources[i, j] = k
+        is_solution_exist = True
+        is_infeasible = model.Status == GRB.INFEASIBLE or model.Status == GRB.INF_OR_UNBD
 
-        sim_end_time = np.max(finish_times)
+        if model.Status == GRB.TIME_LIMIT and model.SolCount == 0:
+            is_runtime_over = True
+            is_solution_exist = False
+        elif is_infeasible:
+            is_runtime_over = True
+            is_solution_exist = False
+        else:
+            for i in range(num_vehicle):
+                arrival_time_tardiness[i] = T_a[i].X
+                departure_time_tardiness[i] = T_d[i].X
+                for j in range(num_ops):
+                    start_times[i, j] = S[j, i].X
+                    finish_times[i, j] = start_times[i, j]
+                    for k in range(resource_ind[j][0], resource_ind[j][1]):
+                        if y[j, i, k].X >= 0.5:
+                            finish_times[i, j] += proc[j][i][k - resource_ind[j][0]]
+                            assigned_resources[i, j] = k
 
-        # Calculate objective value for SAT-based solvers
-        if solver_name in ["FCFS_SAT", "FCFS_landing_SAT", "no_rule_SAT"]:
-            obj_val = weights[0] * sum(arrival_time_tardiness) + weights[1] * sum(departure_time_tardiness)
+            sim_end_time = np.max(finish_times)
+
+            # Calculate objective value for SAT-based solvers
+            if solver_name in ["FCFS_SAT", "FCFS_landing_SAT", "no_rule_SAT"]:
+                obj_val = weights[0] * sum(arrival_time_tardiness) + weights[1] * sum(departure_time_tardiness)
 
         # extract option parameter for objective selection
         objective_option = kwargs.get('objective_option', "weighted_sum")
@@ -336,6 +348,8 @@ class SolverStrategy(ABC):
             instance,
             is_deadlock,
             is_runtime_over,
+            is_solution_exist,
+            is_infeasible,
             objective_option,
         )
 
@@ -459,6 +473,7 @@ class ExactSolver(SolverStrategy):
             solver_name,
             is_deadlock,
             is_runtime_over,
+            is_rhc,
             objective_option=obj_option,
         )
 
@@ -740,8 +755,8 @@ class RunRHC(SolverStrategy):
                             vehicle = waiting_vehicles[i]  # selection logic
                             resource = available_resources[j]  # selection logic
                             if resource.id == planned_resource_assignment[vehicle_original_id[vehicle.id], operation]\
-                                    or (operation in [1, 3] and round(planned_operation_start_times[vehicle_original_id[vehicle.id], operation + 1], 9)
-                                        == round(planned_operation_start_times[vehicle_original_id[vehicle.id], operation], 9)):
+                                    or (operation in [1, 3] and (round(planned_operation_start_times[vehicle_original_id[vehicle.id], operation + 1], 9)
+                                        == round(planned_operation_start_times[vehicle_original_id[vehicle.id], operation], 9) or round(simulator.current_time, 9) >= round(planned_operation_start_times[vehicle_original_id[vehicle.id], operation], 9))):
                                 if round(simulator.current_time, 9) >= round(planned_operation_start_times[vehicle_original_id[vehicle.id], operation], 9):
 
                                     if len(resource.log_operation_finish_times) > 0 and operation in [0, 4]:

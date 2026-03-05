@@ -22,6 +22,8 @@ class Solution:
         instance: Optional['Instance'] = None,
         is_deadlock: bool = False,
         is_runtime_over: bool = False,
+        is_solution_exist: bool = True,
+        is_infeaisible: bool = False,
         objective_option: Optional[str] = None,
     ):
         # Core solver results
@@ -39,6 +41,8 @@ class Solution:
         self.instance = instance
         self.is_deadlock = is_deadlock
         self.is_runtime_over = is_runtime_over
+        self.is_solution_exist = is_solution_exist
+        self.is_infeasible = is_infeaisible
         self.objective_option = objective_option
         self.objective_weights = objective_weights
 
