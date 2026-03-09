@@ -9,6 +9,7 @@ import pickle
 import numpy as np
 from dataclasses import dataclass, field
 from typing import Any, List
+import time
 
 from Instance import Instance, InstanceConfig
 from Solver import solve
@@ -121,8 +122,6 @@ def Numerical_Experiment_RHC(exp_config: ExperimentRHCConfig = ExperimentRHCConf
         [exp_config.proc_gate_v_exp[1], exp_config.uncertainty_level_exp[2],
          exp_config.scheduling_horizon_length_exp[2], exp_config.update_interval_exp[0]],
     ]
-
-    num_is_infeasible_true = 0
 
     for cfg_list in exp_config.num_vehicles_pad_buffer_gate_exp:
         pads = cfg_list[-2]
@@ -256,7 +255,13 @@ def Numerical_Experiment_RHC(exp_config: ExperimentRHCConfig = ExperimentRHCConf
                         "update_interval": update_interval,
                         "is_unified_buffer": True,
                         "seed": seed,
-                        "num_is_infeasible_true": num_is_infeasible_true,  # Add infeasibility count to stats
+                        "num_is_runtime_over_true": 0,
+                        "num_is_solution_exist_false": 0,
+                        "num_is_infeasible_true": 0,
+                        "interval_start_deadlock_avoidance": [],
+                        "interval_finish_deadlock_avoidance": [],
+                        "interval_start_infeasible_avoidance": [],
+                        "interval_finish_infeasible_avoidance": [],
                     })
                     results.append(stats)
 
@@ -293,7 +298,13 @@ def Numerical_Experiment_RHC(exp_config: ExperimentRHCConfig = ExperimentRHCConf
                         "update_interval": update_interval,
                         "is_unified_buffer": True,
                         "seed": seed,
-                        "num_is_infeasible_true": num_is_infeasible_true,  # Add infeasibility count to stats
+                        "num_is_runtime_over_true": 0,
+                        "num_is_solution_exist_false": 0,
+                        "num_is_infeasible_true": 0,
+                        "interval_start_deadlock_avoidance": [],
+                        "interval_finish_deadlock_avoidance": [],
+                        "interval_start_infeasible_avoidance": [],
+                        "interval_finish_infeasible_avoidance": [],
                     })
                     results.append(stats)
 
@@ -304,9 +315,18 @@ def Numerical_Experiment_RHC(exp_config: ExperimentRHCConfig = ExperimentRHCConf
                     # RHC (weighted_sum)
                     # -------------------------
                     solution = None
-                    while solution is None:
-                        scenario_exp, scenario_true = load_scenarios(scenario_exp_path, scenario_true_path, seed)
-                        solution = RHC(
+                    num_is_runtime_over_true = 0
+                    num_is_solution_exist_false = 0
+                    num_is_infeasible_true = 0
+                    interval_start_deadlock_avoidance = []
+                    interval_finish_deadlock_avoidance = []
+                    interval_start_infeasible_avoidance = []
+                    interval_finish_infeasible_avoidance = []
+
+                    scenario_exp, scenario_true = load_scenarios(scenario_exp_path, scenario_true_path, seed)
+                    solution, num_is_runtime_over_true, num_is_solution_exist_false, num_is_infeasible_true, \
+                        interval_start_deadlock_avoidance, interval_finish_deadlock_avoidance, \
+                        interval_start_infeasible_avoidance, interval_finish_infeasible_avoidance = RHC(
                             scenario_RHC_config,
                             scenario_exp,
                             scenario_true,
@@ -316,8 +336,6 @@ def Numerical_Experiment_RHC(exp_config: ExperimentRHCConfig = ExperimentRHCConf
                             scheduler_runtime_limit=10.0,
                             result_dir=result_dir
                         )
-                        if solution is None:
-                            num_is_infeasible_true += 1
                     stats = solution.get_summary_stats()
 
                     if max(proc_gate_v) <= 10.0:
@@ -337,18 +355,34 @@ def Numerical_Experiment_RHC(exp_config: ExperimentRHCConfig = ExperimentRHCConf
                         "update_interval": update_interval,
                         "is_unified_buffer": True,
                         "seed": seed,
-                        "num_is_infeasible_true": num_is_infeasible_true,  # Add infeasibility count to stats
+                        "num_is_runtime_over_true": num_is_runtime_over_true,
+                        "num_is_solution_exist_false": num_is_solution_exist_false,
+                        "num_is_infeasible_true": num_is_infeasible_true,
+                        "interval_start_deadlock_avoidance": interval_start_deadlock_avoidance,
+                        "interval_finish_deadlock_avoidance": interval_finish_deadlock_avoidance,
+                        "interval_start_infeasible_avoidance": interval_start_infeasible_avoidance,
+                        "interval_finish_infeasible_avoidance": interval_finish_infeasible_avoidance,
                     })
 
                     _append_csv_rows(csv_path, [stats])
+                    time.sleep(60.0)
 
                     # -------------------------
                     # RHC (vehicle_wise_max)
                     # -------------------------
                     solution = None
-                    while solution is None:
-                        scenario_exp, scenario_true = load_scenarios(scenario_exp_path, scenario_true_path, seed)
-                        solution = RHC(
+                    num_is_runtime_over_true = 0
+                    num_is_solution_exist_false = 0
+                    num_is_infeasible_true = 0
+                    interval_start_deadlock_avoidance = []
+                    interval_finish_deadlock_avoidance = []
+                    interval_start_infeasible_avoidance = []
+                    interval_finish_infeasible_avoidance = []
+
+                    scenario_exp, scenario_true = load_scenarios(scenario_exp_path, scenario_true_path, seed)
+                    solution, num_is_runtime_over_true, num_is_solution_exist_false, num_is_infeasible_true, \
+                        interval_start_deadlock_avoidance, interval_finish_deadlock_avoidance, \
+                        interval_start_infeasible_avoidance, interval_finish_infeasible_avoidance = RHC(
                             scenario_RHC_config,
                             scenario_exp,
                             scenario_true,
@@ -358,8 +392,6 @@ def Numerical_Experiment_RHC(exp_config: ExperimentRHCConfig = ExperimentRHCConf
                             scheduler_runtime_limit=10.0,
                             result_dir=result_dir
                         )
-                        if solution is None:
-                            num_is_infeasible_true += 1
                     stats = solution.get_summary_stats()
 
                     if max(proc_gate_v) <= 10.0:
@@ -379,8 +411,14 @@ def Numerical_Experiment_RHC(exp_config: ExperimentRHCConfig = ExperimentRHCConf
                         "update_interval": update_interval,
                         "is_unified_buffer": True,
                         "seed": seed,
-                        "num_is_infeasible_true": num_is_infeasible_true,  # Add infeasibility count to stats
+                        "num_is_runtime_over_true": num_is_runtime_over_true,
+                        "num_is_solution_exist_false": num_is_solution_exist_false,
+                        "num_is_infeasible_true": num_is_infeasible_true,
+                        "interval_start_deadlock_avoidance": interval_start_deadlock_avoidance,
+                        "interval_finish_deadlock_avoidance": interval_finish_deadlock_avoidance,
+                        "interval_start_infeasible_avoidance": interval_start_infeasible_avoidance,
+                        "interval_finish_infeasible_avoidance": interval_finish_infeasible_avoidance,
                     })
 
-                    results.append(stats)
                     _append_csv_rows(csv_path, [stats])
+                    time.sleep(60.0)

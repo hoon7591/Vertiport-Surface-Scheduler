@@ -39,6 +39,15 @@ def RHC(scenario_RHC_config, scenario_exp, scenario_true, obj_option, is_file_ge
     log_data_dir.mkdir(parents=True, exist_ok=True)
 
     final_solution = None
+    interval_start_deadlock_avoidance = []
+    interval_finish_deadlock_avoidance = []
+    interval_start_infeasible_avoidance = []
+    interval_finish_infeasible_avoidance = []
+    num_is_runtime_over_true = 0
+    num_is_solution_exist_false = 0
+    num_is_infeasible_true = 0
+    is_deadlock_prev = False
+    is_back_to_deadlock_avoidance = False
 
     while True:
         print(f'\nCurrent Time: {current_time}\n')
@@ -56,68 +65,117 @@ def RHC(scenario_RHC_config, scenario_exp, scenario_true, obj_option, is_file_ge
         solution_schedule = solve(instance_from_scenario_exp, solver="exact", is_numerical_exp=True,
                                   processing_vehicles_op=processing_vehicles_op, processing_vehicles_res=processing_vehicles_res,
                                   horizon_start=current_time, obj_option=obj_option, scheduler_runtime_limit=scheduler_runtime_limit)
-        if solution_schedule.is_solution_exist is False:
+
+        num_is_runtime_over_true += int(solution_schedule.is_runtime_over is True)
+        num_is_solution_exist_false += int(solution_schedule.is_solution_exist is False)
+        num_is_infeasible_true += int(solution_schedule.is_infeasible is True)
+        if solution_schedule.is_solution_exist is False and solution_schedule.is_infeasible is False:
             print(f"Scheduling at time {current_time} exceeded runtime limit of {scheduler_runtime_limit} seconds. Reschedule that instance.")
-            time.sleep(np.random.uniform(10.0, 30.0))
+            time.sleep(60.0)
             continue
-        if solution_schedule.is_infeasible is True:
-            print(f"Scheduling at time {current_time} is infeasible. Restart RHC for that scenario")
-            break
+        elif solution_schedule.is_infeasible is True:
+            print(f"Scheduling at time {current_time} is infeasible. One step back to avoid deadlock.")
+            is_back_to_deadlock_avoidance = True
+            current_time -= update_interval
 
-        if is_file_gen:
-            path = log_data_dir / f"solution_schedule_{current_time}.pkl"
-            with path.open('wb') as file:
-                pickle.dump(solution_schedule, file)
-            visualize_gantt(solution_schedule, activated_vehicle_id_exp, processing_vehicles_id, processing_vehicles_op, current_time, 'save', log_data_dir)
-            visualize_gantt_plotly(solution_schedule, activated_vehicle_id_exp, processing_vehicles_id, processing_vehicles_op, current_time, 'save', current_time, log_data_dir)
+        if is_back_to_deadlock_avoidance is False:
+            if is_file_gen:
+                path = log_data_dir / f"solution_schedule_{current_time}.pkl"
+                with path.open('wb') as file:
+                    pickle.dump(solution_schedule, file)
+                visualize_gantt(solution_schedule, activated_vehicle_id_exp, processing_vehicles_id, processing_vehicles_op, current_time, 'save', log_data_dir)
+                visualize_gantt_plotly(solution_schedule, activated_vehicle_id_exp, processing_vehicles_id, processing_vehicles_op, current_time, 'save', current_time, log_data_dir)
 
-        for i in range(len(activated_vehicle_id_exp)):
-            for j in range(scenario_exp.num_operations):
-                all_start_times_schedule[activated_vehicle_id_exp[i], j] = solution_schedule.start_times[i, j]
-                all_assigned_resources_schedule[activated_vehicle_id_exp[i], j] = solution_schedule.assigned_resources[i, j]
+            for i in range(len(activated_vehicle_id_exp)):
+                for j in range(scenario_exp.num_operations):
+                    all_start_times_schedule[activated_vehicle_id_exp[i], j] = solution_schedule.start_times[i, j]
+                    all_assigned_resources_schedule[activated_vehicle_id_exp[i], j] = solution_schedule.assigned_resources[i, j]
 
-        all_start_times_run = copy.deepcopy(all_start_times_schedule)
-        all_assigned_resources_run = copy.deepcopy(all_assigned_resources_schedule)
-        if 'activated_vehicle_id_true' in locals() or 'activated_vehicle_id_true' in globals():
-            for i in range(len(activated_vehicle_id_true)):
-                for j in range(scenario_true.num_operations):
-                    if round(solution_run.start_times[i, j], 9) <= round(current_time, 9):
-                        all_start_times_run[activated_vehicle_id_true[i], j] = solution_run.start_times[i, j]
-                        all_assigned_resources_run[activated_vehicle_id_true[i], j] = solution_run.assigned_resources[i, j]
+            all_start_times_run = copy.deepcopy(all_start_times_schedule)
+            all_assigned_resources_run = copy.deepcopy(all_assigned_resources_schedule)
+            if 'activated_vehicle_id_true' in locals() or 'activated_vehicle_id_true' in globals():
+                for i in range(len(activated_vehicle_id_true)):
+                    for j in range(scenario_true.num_operations):
+                        if round(solution_run.start_times[i, j], 9) <= round(current_time, 9):
+                            all_start_times_run[activated_vehicle_id_true[i], j] = solution_run.start_times[i, j]
+                            all_assigned_resources_run[activated_vehicle_id_true[i], j] = solution_run.assigned_resources[i, j]
 
-        instance_from_scenario_true, activated_vehicle_id_true = Scenario.scenario_to_instance_true(scenario_true, current_time + update_interval)
+            instance_from_scenario_true, activated_vehicle_id_true = Scenario.scenario_to_instance_true(scenario_true, current_time + update_interval)
 
-        if len(activated_vehicle_id_true) == 0:
-            current_time += update_interval
-            scheduling_horizon = [current_time, current_time + scenario_RHC_config.scheduling_horizon_length]
-            continue
+            if len(activated_vehicle_id_true) == 0:
+                current_time += update_interval
+                scheduling_horizon = [current_time, current_time + scenario_RHC_config.scheduling_horizon_length]
+                continue
 
-        if is_file_gen:
-            path = log_data_dir / f"instance_true_{current_time}.pkl"
-            with path.open('wb') as file:
-                pickle.dump(instance_from_scenario_true, file)
-            path = log_data_dir / f"RHC_info_{current_time}.pkl"
-            RHC_info = {
-                "all_assigned_resources_schedule": all_assigned_resources_schedule,
-                "all_start_times_schedule": all_start_times_schedule,
-                "all_assigned_resources_run": all_assigned_resources_run,
-                "all_start_times_run": all_start_times_run,
-                "processing_vehicles_id": processing_vehicles_id,
-                "processing_vehicles_op": processing_vehicles_op,
-                "processing_vehicles_res": processing_vehicles_res,
-                "remaining_proc_time": remaining_proc_time,
-                "activated_vehicle_id_exp": activated_vehicle_id_exp,
-                "activated_vehicle_id_true": activated_vehicle_id_true
-            }
-            with path.open('wb') as file:
-                pickle.dump(RHC_info, file)
+            if is_file_gen:
+                path = log_data_dir / f"instance_true_{current_time}.pkl"
+                with path.open('wb') as file:
+                    pickle.dump(instance_from_scenario_true, file)
+                path = log_data_dir / f"RHC_info_{current_time}.pkl"
+                RHC_info = {
+                    "all_assigned_resources_schedule": all_assigned_resources_schedule,
+                    "all_start_times_schedule": all_start_times_schedule,
+                    "all_assigned_resources_run": all_assigned_resources_run,
+                    "all_start_times_run": all_start_times_run,
+                    "processing_vehicles_id": processing_vehicles_id,
+                    "processing_vehicles_op": processing_vehicles_op,
+                    "processing_vehicles_res": processing_vehicles_res,
+                    "remaining_proc_time": remaining_proc_time,
+                    "activated_vehicle_id_exp": activated_vehicle_id_exp,
+                    "activated_vehicle_id_true": activated_vehicle_id_true
+                }
+                with path.open('wb') as file:
+                    pickle.dump(RHC_info, file)
 
-        solution_run = solve(instance_from_scenario_true, solver="run_RHC", is_numerical_exp=True,
-                             planned_resource_assignment=all_assigned_resources_run,
-                             planned_operation_start_times=all_start_times_run,
-                             vehicle_original_id=activated_vehicle_id_true,
-                             obj_option=obj_option,
-                             next_current_time=current_time + update_interval)
+            solution_run = solve(instance_from_scenario_true, solver="run_RHC", is_numerical_exp=True,
+                                 planned_resource_assignment=all_assigned_resources_run,
+                                 planned_operation_start_times=all_start_times_run,
+                                 vehicle_original_id=activated_vehicle_id_true,
+                                 obj_option=obj_option,
+                                 next_current_time=current_time + update_interval,
+                                 interval_start_deadlock_avoidance=interval_start_deadlock_avoidance,
+                                 interval_finish_deadlock_avoidance=interval_finish_deadlock_avoidance,
+                                 interval_start_infeasible_avoidance=interval_start_infeasible_avoidance,
+                                 interval_finish_infeasible_avoidance=interval_finish_infeasible_avoidance)
+
+        if (solution_run.is_deadlock and is_deadlock_prev) or is_back_to_deadlock_avoidance is True:
+            if solution_run.is_deadlock and is_deadlock_prev and is_back_to_deadlock_avoidance is False:
+                print(f"Consecutive deadlock occurred at time {current_time}. Rerun run_RHC with deadlock avoidance.")
+                if len(interval_finish_deadlock_avoidance) > 0 and round(current_time, 9) <= round(
+                        interval_finish_deadlock_avoidance[-1], 9):
+                    interval_finish_deadlock_avoidance[-1] = current_time + 10.0
+                else:
+                    interval_start_deadlock_avoidance.append(current_time)
+                    interval_finish_deadlock_avoidance.append(current_time + 10.0)
+
+            elif is_back_to_deadlock_avoidance is True:
+                print(f"Back to deadlock avoidance at time {current_time} for handling infeasiblity. Rerun run_RHC with deadlock avoidance.")
+                is_back_to_deadlock_avoidance = False
+                with open(f'log_data/instance_true_{current_time}.pkl', 'rb') as file:
+                    instance_from_scenario_true = pickle.load(file)
+                with open(f'log_data/RHC_info_{current_time}.pkl', 'rb') as file:
+                    RHC_info = pickle.load(file)
+                all_assigned_resources_run = RHC_info["all_assigned_resources_run"]
+                all_start_times_run = RHC_info["all_start_times_run"]
+                activated_vehicle_id_true = RHC_info["activated_vehicle_id_true"]
+                if len(interval_finish_infeasible_avoidance) > 0 and round(current_time, 9) <= round(
+                        interval_finish_infeasible_avoidance[-1], 9):
+                    interval_finish_infeasible_avoidance[-1] = current_time + 2 * update_interval
+                else:
+                    interval_start_infeasible_avoidance.append(current_time)
+                    interval_finish_infeasible_avoidance.append(current_time + 2 * update_interval)
+
+                solution_run = solve(instance_from_scenario_true, solver="run_RHC", is_numerical_exp=True,
+                                     planned_resource_assignment=all_assigned_resources_run,
+                                     planned_operation_start_times=all_start_times_run,
+                                     vehicle_original_id=activated_vehicle_id_true,
+                                     obj_option=obj_option,
+                                     next_current_time=current_time + update_interval,
+                                     interval_start_deadlock_avoidance=interval_start_deadlock_avoidance,
+                                     interval_finish_deadlock_avoidance=interval_finish_deadlock_avoidance,
+                                     interval_start_infeasible_avoidance=interval_start_infeasible_avoidance,
+                                     interval_finish_infeasible_avoidance=interval_finish_infeasible_avoidance)
+        is_deadlock_prev = solution_run.is_deadlock
 
         remaining_proc_time = []
 
@@ -130,8 +188,7 @@ def RHC(scenario_RHC_config, scenario_exp, scenario_true, obj_option, is_file_ge
 
         for i in range(len(processing_vehicles_id)):
             if processing_vehicles_id[i] not in waiting_next_op_vehicles_id:
-                remaining_proc_time.append(max(scenario_exp.proc[processing_vehicles_op[i]][activated_vehicle_id_true[processing_vehicles_id[i]]]
-                                           [processing_vehicles_res[i] - solution_run.resource_ind[processing_vehicles_op[i]][0]]
+                remaining_proc_time.append(max(scenario_exp.proc[processing_vehicles_op[i]][activated_vehicle_id_true[processing_vehicles_id[i]]][processing_vehicles_res[i] - solution_run.resource_ind[processing_vehicles_op[i]][0]]
                                            - (current_time + update_interval - solution_run.start_times[processing_vehicles_id[i], processing_vehicles_op[i]]), 0.0))
                 if activated_vehicle_id_true[processing_vehicles_id[i]] in scenario_RHC_config.dynamic_proc_v_id and remaining_proc_time[-1] <= update_interval:
                     idx = scenario_RHC_config.dynamic_proc_v_id.index(activated_vehicle_id_true[processing_vehicles_id[i]])
@@ -169,4 +226,4 @@ def RHC(scenario_RHC_config, scenario_exp, scenario_true, obj_option, is_file_ge
                     visualize_gantt_plotly(final_solution, activated_vehicle_id_true, [], [], current_time, 'save')
             break
 
-    return final_solution
+    return final_solution, num_is_runtime_over_true, num_is_solution_exist_false, num_is_infeasible_true, interval_start_deadlock_avoidance, interval_finish_deadlock_avoidance, interval_start_infeasible_avoidance, interval_finish_infeasible_avoidance

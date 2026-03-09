@@ -847,7 +847,7 @@ class VertiportSimulator:
                 resource.allocation_prohibited_vehicle_n_operation.clear()
         else:
             # Handle full resource availability (traditional behavior, for RHC)
-            if resource.state == ResourceState.PROCESSING:
+            if resource.state == ResourceState.PROCESSING or resource.state == ResourceState.OCCUPIED:
                 return
             resource.state = ResourceState.IDLE
             resource.allocation_prohibited_vehicle_n_operation.clear()
@@ -1153,6 +1153,41 @@ class VertiportSimulator:
                            [num_pad + num_buffer_in, num_pad + num_buffer_in + num_gate],
                            [num_pad + num_buffer_in + num_gate, num_pad + num_buffer_in + num_gate + num_buffer_out],
                            [0, num_pad]]
+
+    def build_resource_ids(self) -> List[List[int]]:
+        """Build resource ID lists for each operation type"""
+        is_unified_buffer = self.instance.is_unified_buffer
+        num_pad = self.instance.num_pad
+        num_buffer_in = self.instance.num_buffer_in
+        num_gate = self.instance.num_gate
+        num_buffer_out = self.instance.num_buffer_out
+        num_buffer = self.instance.num_buffer
+
+        pad_ids = list(range(num_pad))
+        buffer_ids = []
+        if is_unified_buffer:
+            if num_buffer == 0:
+                gate_ids = list(range(num_pad, num_pad + num_gate))
+                pass
+            else:
+                buffer_ids = list(range(num_pad, num_pad + num_buffer))
+                gate_ids = list(range(num_pad + num_buffer, num_pad + num_buffer + num_gate))
+        else:
+            if num_buffer_in == 0:
+                gate_ids = list(range(num_pad, num_pad + num_gate))
+                if num_buffer_out == 0:
+                    pass
+                else:
+                    buffer_ids = list(range(num_pad + num_gate, num_pad + num_gate + num_buffer_out))
+            else:
+                if num_buffer_out == 0:
+                    buffer_ids = list(range(num_pad, num_pad + num_buffer_in))
+                    gate_ids = list(range(num_pad + num_buffer_in, num_pad + num_buffer_in + num_gate))
+                else:
+                    buffer_ids = list(range(num_pad, num_pad + num_buffer_in)) + list(range(num_pad + num_buffer_in + num_gate, num_pad + num_buffer_in + num_gate + num_buffer_out))
+                    gate_ids = list(range(num_pad + num_buffer_in, num_pad + num_buffer_in + num_gate))
+
+        return [pad_ids, buffer_ids, gate_ids]
     
     def _generate_solution(self, runtime, is_deadlock, is_runtime_over, solver_type, **kwargs) -> Solution:
         """Generate Solution object from simulation results"""
@@ -1162,30 +1197,7 @@ class VertiportSimulator:
         num_operations = self.instance.num_operations
         weights = self.instance.objective_weights
 
-        is_unified_buffer = self.instance.is_unified_buffer
-        num_pad = self.instance.num_pad
-        num_buffer_in = self.instance.num_buffer_in
-        num_gate = self.instance.num_gate
-        num_buffer_out = self.instance.num_buffer_out
-        num_buffer = self.instance.num_buffer
-
-        buffer_ids = []
-        if is_unified_buffer:
-            if num_buffer == 0:
-                pass
-            else:
-                buffer_ids = list(range(num_pad, num_pad + num_buffer))
-        else:
-            if num_buffer_in == 0:
-                if num_buffer_out == 0:
-                    pass
-                else:
-                    buffer_ids = list(range(num_pad + num_gate, num_pad + num_gate + num_buffer_out))
-            else:
-                if num_buffer_out == 0:
-                    buffer_ids = list(range(num_pad, num_pad + num_buffer_in))
-                else:
-                    buffer_ids = list(range(num_pad, num_pad + num_buffer_in)) + list(range(num_pad + num_buffer_in + num_gate, num_pad + num_buffer_in + num_gate + num_buffer_out))
+        resource_ids = self.build_resource_ids()
 
         # Initialize arrays
         start_times = np.zeros((num_vehicles, num_operations))
@@ -1198,11 +1210,11 @@ class VertiportSimulator:
         for vehicle in self.vehicles.values():
             v_id = vehicle.id
             if len(vehicle.log_start_times) != 5:
-                delete_indices = [
-                    i
-                    for i in range(len(vehicle.log_start_times) - 1)
-                    if vehicle.log_assigned_resources[i] in buffer_ids and vehicle.log_assigned_resources[i + 1] in buffer_ids
-                ]
+                delete_indices = []
+                for i in range(len(vehicle.log_start_times) - 1):
+                    for j in resource_ids:
+                        if vehicle.log_assigned_resources[i] in j and vehicle.log_assigned_resources[i + 1] in j:
+                             delete_indices.append(i)
                 delete_indices_set = set(delete_indices)
                 vehicle.log_start_times = [x for i, x in enumerate(vehicle.log_start_times) if i not in delete_indices_set]
                 vehicle.log_operation_finish_times = [x for i, x in enumerate(vehicle.log_operation_finish_times) if i not in delete_indices_set]
@@ -1229,7 +1241,16 @@ class VertiportSimulator:
         
         # Calculate total simulation time
         sim_end_time = self.current_time
-        
+
+        # For premature quit of RHC
+        premature_vehicle_ids = np.where((finish_times == 0).any(axis=1))[0]
+        for i in premature_vehicle_ids:
+            if max(finish_times[i, :]) <= next_current_time:
+                for j in range(len(finish_times[i, :])):
+                    if finish_times[i, j] == 0:
+                        start_times[i, j] = next_current_time + 1e-06
+                        finish_times[i, j] = next_current_time + 1e-06
+
         return Solution(
             obj_val=obj_val,
             runtime=runtime,
@@ -1274,7 +1295,9 @@ class VertiportSimulatorRecedingHorizon(VertiportSimulator):
 
         return available
 
-    def can_assign_vehicle_to_resource(self, vehicle_id: int, resource_id: int, operation: int) -> bool:
+    def can_assign_vehicle_to_resource(self, vehicle_id: int, resource_id: int, operation: int,
+                                       interval_start_deadlock_avoidance: List[float],
+                                       interval_finish_deadlock_avoidance: List[float]) -> bool:
         """Check if a vehicle can be assigned to a specific resource for an operation"""
         if vehicle_id not in self.vehicles or resource_id not in self.resources:
             return False
@@ -1310,5 +1333,57 @@ class VertiportSimulatorRecedingHorizon(VertiportSimulator):
         if operation == expected_operation and self.current_time < vehicle.planned_gate_close_time:
             return False
 
+        ########## DEADLOCK AVOIDANCE CONDITIONS FOR RHC ##########
+        for i in range(len(interval_start_deadlock_avoidance)):
+            if interval_start_deadlock_avoidance[i] < self.current_time <= interval_finish_deadlock_avoidance[i]:
+                if operation == 0:
+                    if self.get_num_landing_processing() >= self.instance.num_pad - 1:
+                        return False
+
+                if self.instance.is_unified_buffer:
+                    if operation == 1:
+                        if self.get_num_buffer_in_processing() >= self.instance.num_buffer - 1:
+                            return False
+        ###########################################################
+
         processing_time = self.instance.proc[operation][vehicle_id][local_idx]
         return processing_time >= 0
+
+    def assign_vehicle_to_resource_at_future_time(self, vehicle_id: int, resource_id: int, operation: int,
+                                                  future_time: float, interval_start_deadlock_avoidance: List[float],
+                                                  interval_finish_deadlock_avoidance: List[float]) -> bool:
+        """
+        Assign a vehicle to a resource for an operation.
+        Returns True if assignment successful, False otherwise.
+        """
+        if not self.can_assign_vehicle_to_resource(vehicle_id, resource_id, operation, interval_start_deadlock_avoidance, interval_finish_deadlock_avoidance):
+            return False
+
+        vehicle = self.vehicles[vehicle_id]
+
+        # Calculate when operation can start
+        start_time = future_time
+
+        # Schedule operation start
+        start_event = Event(
+            time=start_time,
+            event_type=EventType.OPERATION_START,
+            vehicle_id=vehicle_id,
+            resource_id=resource_id,
+            operation_id=operation
+        )
+        heapq.heappush(self.event_queue, start_event)
+
+        # get processing time for vehicle, resource combination
+
+        return True
+
+    def assign_vehicle_to_resource_now(self, vehicle_id: int, resource_id: int,
+                                       operation: int, interval_start_deadlock_avoidance: List[float],
+                                       interval_finish_deadlock_avoidance: List[float]) -> bool:  # TODO : allocate resource to the vehicle at the future time
+        """
+        Assign a vehicle to a resource for an operation.
+        Returns True if assignment successful, False otherwise.
+        """
+
+        return self.assign_vehicle_to_resource_at_future_time(vehicle_id, resource_id, operation, self.current_time, interval_start_deadlock_avoidance, interval_finish_deadlock_avoidance)

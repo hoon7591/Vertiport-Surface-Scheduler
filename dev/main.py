@@ -163,31 +163,33 @@ if __name__ == "__main__":
     # visualize_gantt(solution, activated_vehicle_id_exp, [42, 145, 72, 98, 171, 237, 10, 100], [0, 0, 3, 2, 2, 2, 2, 2], None, 'show')
 
     ### For Debugging of RHC Implementation (run) ###
-    # with open('log_data/instance_true_574.0.pkl', 'rb') as file:
+    # with open('log_data/instance_true_570.0.pkl', 'rb') as file:
     #     instance_from_scenario_true = pickle.load(file)
-    # with open('log_data/RHC_info_574.0.pkl', 'rb') as file:
+    # with open('log_data/RHC_info_570.0.pkl', 'rb') as file:
     #     RHC_info = pickle.load(file)
     # solution = solve(instance_from_scenario_true, solver="run_RHC", is_numerical_exp=True,
     #                  planned_resource_assignment=RHC_info["all_assigned_resources_run"],
     #                  planned_operation_start_times=RHC_info["all_start_times_run"],
     #                  vehicle_original_id=RHC_info["activated_vehicle_id_true"],
-    #                  next_current_time=576.0)
+    #                  next_current_time=571.0,
+    #                  interval_start_deadlock_avoidance=[570.0],
+    #                  interval_finish_deadlock_avoidance=[580.0])
     # # visualize_gantt(solution, activated_vehicle_id_true, [], [], None, 'show')
-    # visualize_gantt_plotly(solution, RHC_info["activated_vehicle_id_true"], [], [], None, 'show', 574.0)
+    # visualize_gantt_plotly(solution, RHC_info["activated_vehicle_id_true"], [], [], None, 'show', 570.0)
 
     ## For Debugging of RHC Implementation (schedule) ###
-    # with open('log_data/instance_exp_576.0.pkl', 'rb') as file:
+    # with open('log_data/instance_exp_696.0.pkl', 'rb') as file:
     #     instance_from_scenario_exp = pickle.load(file)
-    # with open('log_data/RHC_info_574.0.pkl', 'rb') as file:
+    # with open('log_data/RHC_info_695.0.pkl', 'rb') as file:
     #     RHC_info = pickle.load(file)
     # solution = solve(instance_from_scenario_exp, solver="exact", is_numerical_exp=True,
     #                  processing_vehicles_op=RHC_info["processing_vehicles_op"], processing_vehicles_res=RHC_info["processing_vehicles_res"],
-    #                  horizon_start=576.0, obj_option="vehicle_wise_max", scheduler_runtime_limit=10.0)
+    #                  horizon_start=696.0, obj_option="vehicle_wise_max", scheduler_runtime_limit=10.0)
     # # visualize_gantt(solution, activated_vehicle_id_true, [], [], None, 'show')
-    # visualize_gantt_plotly(solution, instance_from_scenario_exp, [], [], None, 'show', 576.0)
+    # visualize_gantt_plotly(solution, instance_from_scenario_exp, [], [], None, 'show', 696.0)
 
     ### RHC Execution (obj_option: "weighted_sum", "vehicle_wise_max", "weighted_sum_of_max") ###
-    # final_solution = RHC(scenario_RHC_config, scenario_exp, scenario_true, obj_option="vehicle_wise_max", is_file_gen=True, is_result_file_gen=True, scheduler_runtime_limit=10.0, result_dir=None)
+    # final_solution, num_is_runtime_over_true, num_is_solution_exist_false = RHC(scenario_RHC_config, scenario_exp, scenario_true, obj_option="vehicle_wise_max", is_file_gen=True, is_result_file_gen=True, scheduler_runtime_limit=10.0, result_dir=None)
 
 
     #################### Numerical Study for Stochastic Full-Day Multi-Horizon Cases ####################

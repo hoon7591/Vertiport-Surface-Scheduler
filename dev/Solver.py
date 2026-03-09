@@ -447,7 +447,13 @@ class ExactSolver(SolverStrategy):
             S, y = variables["S"], variables["y"]
             for i, op_idx in enumerate(processing_vehicles_op):
                 model.addConstr(y[op_idx, i, processing_vehicles_res[i]] == 1)
-                model.addConstr(S[op_idx, i] == horizon_start)
+                if op_idx in [1, 3]:
+                    model.addConstr(S[op_idx, i] == horizon_start - 1e-06)      # buffer를 사용하지 않는 vehicle들이 시작지점에서 interupt 되는 문제를 방지하기 위해 이전부터 buffer를 점유하고 있었음을 의미하는 작은 마진을 줌
+                else:
+                    model.addConstr(S[op_idx, i] == horizon_start)
+
+            # RHC 모드일 때, Deadlock Avoidance
+
 
         # 🔹 Solve (RHC는 time limit 더 타이트하게)
         if is_numerical_exp or is_rhc:
@@ -460,6 +466,7 @@ class ExactSolver(SolverStrategy):
             else:
                 is_runtime_over = False  # 필요하면 추가 처리
         else:
+            model.Params.MIPFocus = 1  # Prioritize finding better feasible solutions early
             model.optimize()
             is_runtime_over = False
 
@@ -726,6 +733,10 @@ class RunRHC(SolverStrategy):
         vehicle_original_id = kwargs["vehicle_original_id"]
         obj_option = kwargs.get("obj_option", "weighted_sum")
         next_current_time = kwargs["next_current_time"]
+        interval_start_deadlock_avoidance = kwargs["interval_start_deadlock_avoidance"]
+        interval_finish_deadlock_avoidance = kwargs["interval_finish_deadlock_avoidance"]
+        interval_start_infeasible_avoidance = kwargs["interval_start_infeasible_avoidance"]
+        interval_finish_infeasible_avoidance = kwargs["interval_finish_infeasible_avoidance"]
         past_event_time = 0.0
 
         # Create simulator
@@ -743,20 +754,21 @@ class RunRHC(SolverStrategy):
                 break
 
             # RunRHC logic here - TODO : improve more - multiple vehicles and multiple resources
+            break_flag = False
             for operation in range(instance.num_operations):
                 waiting_vehicles = simulator.get_waiting_vehicles(operation)
                 available_resources = simulator.get_available_resources(operation)
 
                 # Make assignment decisions
                 if waiting_vehicles and available_resources:
-                    break_flag = False
+                    break_flag2 = False
                     for i in range(len(waiting_vehicles)):
                         for j in range(len(available_resources)):
                             vehicle = waiting_vehicles[i]  # selection logic
                             resource = available_resources[j]  # selection logic
                             if resource.id == planned_resource_assignment[vehicle_original_id[vehicle.id], operation]\
                                     or (operation in [1, 3] and (round(planned_operation_start_times[vehicle_original_id[vehicle.id], operation + 1], 9)
-                                        == round(planned_operation_start_times[vehicle_original_id[vehicle.id], operation], 9) or round(simulator.current_time, 9) >= round(planned_operation_start_times[vehicle_original_id[vehicle.id], operation], 9))):
+                                        == round(planned_operation_start_times[vehicle_original_id[vehicle.id], operation], 9) or round(simulator.current_time, 9) >= round(planned_operation_start_times[vehicle_original_id[vehicle.id], operation + 1], 9))):
                                 if round(simulator.current_time, 9) >= round(planned_operation_start_times[vehicle_original_id[vehicle.id], operation], 9):
 
                                     if len(resource.log_operation_finish_times) > 0 and operation in [0, 4]:
@@ -764,12 +776,29 @@ class RunRHC(SolverStrategy):
                                         pre_v = resource.previous_vehicle_operation[0]
                                         pre_op = resource.previous_vehicle_operation[1]
                                         available_time = finish + instance.ST[(pre_op, operation)][pre_v][vehicle.id][resource.id]
-                                        if available_time > event.time:
+                                        if round(available_time, 9) > round(event.time, 9):
                                             if resource.state == ResourceState.IDLE:
                                                 resource.state = ResourceState.SEPARATION_DELAY
                                         else:
                                             if resource.state != ResourceState.PROCESSING:
-                                                resource.state = ResourceState.IDLE
+                                                if len(interval_start_infeasible_avoidance) == 0:
+                                                    resource.state = ResourceState.IDLE
+                                                else:
+                                                    for k in range(len(interval_start_infeasible_avoidance)):
+                                                        if interval_start_infeasible_avoidance[k] < simulator.current_time <= interval_finish_infeasible_avoidance[k]:
+                                                            if resource.state == ResourceState.OCCUPIED:
+                                                                buffer_ids = simulator.build_resource_ids()[1]
+                                                                num_occupied_buffers = 0
+                                                                for buffer_id in buffer_ids:
+                                                                    if simulator.resources[buffer_id].state == ResourceState.OCCUPIED:
+                                                                        num_occupied_buffers += 1
+                                                                if num_occupied_buffers < instance.num_buffer:
+                                                                    resource.state = ResourceState.IDLE
+                                                            else:
+                                                                resource.state = ResourceState.IDLE
+                                                            break
+                                                        else:
+                                                            resource.state = ResourceState.IDLE
 
                                     # a = 0
                                     # # if resource.state == ResourceState.SEPARATION_DELAY and (event.event_type == EventType.RESOURCE_AVAILABLE or event.event_type == EventType.VEHICLE_ARRIVAL or event.event_type == EventType.OPERATION_COMPLETE) and resource.id == event.resource_id:
@@ -782,9 +811,16 @@ class RunRHC(SolverStrategy):
                                     #                 a = 1
                                     #                 break
 
-                                    if simulator.can_assign_vehicle_to_resource(vehicle.id, resource.id, operation):
-                                        simulator.assign_vehicle_to_resource_now(vehicle.id, resource.id, operation)
+                                    if simulator.can_assign_vehicle_to_resource(vehicle.id, resource.id, operation,
+                                                                                interval_start_deadlock_avoidance,
+                                                                                interval_finish_deadlock_avoidance):
+                                        simulator.assign_vehicle_to_resource_now(vehicle.id, resource.id, operation,
+                                                                                 interval_start_deadlock_avoidance,
+                                                                                 interval_finish_deadlock_avoidance)
+                                        if operation in [2, 4]:
+                                            simulator.resources[vehicle.log_assigned_resources[-1]].state = ResourceState.IDLE
                                         break_flag = True
+                                        break_flag2 = True
                                         break
                                     # elif a:
                                     #     resource.state = ResourceState.SEPARATION_DELAY
@@ -842,8 +878,10 @@ class RunRHC(SolverStrategy):
                                         for k, v in VehicleStateToOperation.mapping.items():
                                             inverse_mapping[v].append(k)
                                         vehicle.state = inverse_mapping[operation][0]
-                        if break_flag:
+                        if break_flag2:
                             break
+                    if break_flag:
+                        break
 
             past_event_time = event.time
 
