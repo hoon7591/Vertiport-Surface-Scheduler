@@ -42,19 +42,20 @@ class ScenarioRHCConfig:
     # for receding horizon control
     scheduling_horizon_length: float = 50.0  # in minutes
     update_interval: float = 1.0  # in minutes
-    coe_bridge_from_update_interval: float = 1.0  # adjust ratio of update interval as a std of stochastic bridge
+    coe_bridge_from_update_interval: float = 0.5  # adjust ratio of update interval as a std of stochastic bridge
     operation_hour: int = 18
     disturbance_proc: Any = field(default_factory=lambda: [
-        [-0.2, 1.0, 0.2],
-        [-1.0, 3.0, 0.0],
-        [-0.2, 1.0, 0.2]
+        [-0.2, 0.6, 0.0],
+        [-0.3, 1.0, 0.0],
+        [-0.2, 0.6, 0.0]
     ])  # [lower, upper, mode] of beta distribution; for deterministic case, use [c, c, c] for each sublist
     disturbance_ready: List[float] = field(default_factory=lambda: [-3.0, 10.0, 1.0])  # [lower, upper, mode] of beta distribution; for deterministic case, use [c, c, c]
     dynamic_arrival_v_id: List[int] = field(default_factory=lambda: [])
-    dynamic_arrival_aware_time_low: float = 5.0   # lower bound; should be larger than update_interval
+    dynamic_arrival_aware_time_range: List[float] = field(default_factory=lambda: [5.0, 20.0])   # lower bound should be larger than update_interval
     dynamic_proc_v_id: List[int] = field(default_factory=lambda: [])
     dynamic_proc_op: List[int] = field(default_factory=lambda: [])
     dynamic_proc_inc_time: List[float] = field(default_factory=lambda: [])          # specifically defined by user
+    uncertainty_compensation_for_early_ready: float = 20.0  # usually same as upper bound of dynamic_arrival_aware_time_range
 
 
 class Scenario:
@@ -279,7 +280,7 @@ class Scenario:
         vehicle_dynamic_arrival_aware_time = np.full(num_vehicles, -1.0)
         for i in range(num_vehicles):
             if whether_vehicle_dynamic_arrival[i]:
-                vehicle_dynamic_arrival_aware_time[i] = np.random.uniform(low=config.dynamic_arrival_aware_time_low, high=config.scheduling_horizon_length)
+                vehicle_dynamic_arrival_aware_time[i] = np.random.uniform(low=config.dynamic_arrival_aware_time_range[0], high=config.dynamic_arrival_aware_time_range[1])
 
         return cls(
             config.seed, config.num_operations, config.num_vehicles_per_hour, num_vehicles, vehicle_id, config.num_pad,
@@ -301,8 +302,8 @@ class Scenario:
             if config.disturbance_ready[0] == config.disturbance_ready[1] == config.disturbance_ready[2]:
                 ready[i] = scenario_exp.vehicle_arrival_times[i] + config.disturbance_ready[0]
             else:
-                if scenario_exp.vehicle_arrival_times[i] <= config.scheduling_horizon_length:
-                    disturbance_ready_ = [x * scenario_exp.vehicle_arrival_times[i] / config.scheduling_horizon_length for x in config.disturbance_ready]
+                if scenario_exp.vehicle_arrival_times[i] <= config.uncertainty_compensation_for_early_ready:
+                    disturbance_ready_ = [x * scenario_exp.vehicle_arrival_times[i] / config.uncertainty_compensation_for_early_ready for x in config.disturbance_ready]
                     alpha_ready = 1.0 + config.lambda_beta_pert * (disturbance_ready_[2] - disturbance_ready_[0]) / (disturbance_ready_[1] - disturbance_ready_[0])
                     beta_ready = 1.0 + config.lambda_beta_pert * (disturbance_ready_[1] - disturbance_ready_[2]) / (disturbance_ready_[1] - disturbance_ready_[0])
                     ready[i] = max(scenario_exp.vehicle_arrival_times[i] + disturbance_ready_[0] + (disturbance_ready_[1] - disturbance_ready_[0]) * np.random.beta(alpha_ready, beta_ready), 0.0)

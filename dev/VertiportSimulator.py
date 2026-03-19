@@ -847,7 +847,7 @@ class VertiportSimulator:
                 resource.allocation_prohibited_vehicle_n_operation.clear()
         else:
             # Handle full resource availability (traditional behavior, for RHC)
-            if resource.state == ResourceState.PROCESSING or resource.state == ResourceState.OCCUPIED:
+            if resource.state == ResourceState.PROCESSING:
                 return
             resource.state = ResourceState.IDLE
             resource.allocation_prohibited_vehicle_n_operation.clear()
@@ -1290,14 +1290,12 @@ class VertiportSimulatorRecedingHorizon(VertiportSimulator):
 
         for res_id in range(start_idx, end_idx):
             resource = self.resources[res_id]
-            if resource.state == ResourceState.IDLE or resource.state == ResourceState.SEPARATION_DELAY or resource.state == ResourceState.OCCUPIED:
+            if resource.state == ResourceState.IDLE or resource.state == ResourceState.SEPARATION_DELAY:    # or resource.state == ResourceState.OCCUPIED:
                 available.append(resource)
 
         return available
 
-    def can_assign_vehicle_to_resource(self, vehicle_id: int, resource_id: int, operation: int,
-                                       interval_start_deadlock_avoidance: List[float],
-                                       interval_finish_deadlock_avoidance: List[float]) -> bool:
+    def can_assign_vehicle_to_resource(self, vehicle_id: int, resource_id: int, operation: int) -> bool:
         """Check if a vehicle can be assigned to a specific resource for an operation"""
         if vehicle_id not in self.vehicles or resource_id not in self.resources:
             return False
@@ -1333,57 +1331,16 @@ class VertiportSimulatorRecedingHorizon(VertiportSimulator):
         if operation == expected_operation and self.current_time < vehicle.planned_gate_close_time:
             return False
 
-        ########## DEADLOCK AVOIDANCE CONDITIONS FOR RHC ##########
-        for i in range(len(interval_start_deadlock_avoidance)):
-            if interval_start_deadlock_avoidance[i] < self.current_time <= interval_finish_deadlock_avoidance[i]:
-                if operation == 0:
-                    if self.get_num_landing_processing() >= self.instance.num_pad - 1:
-                        return False
-
-                if self.instance.is_unified_buffer:
-                    if operation == 1:
-                        if self.get_num_buffer_in_processing() >= self.instance.num_buffer - 1:
-                            return False
-        ###########################################################
+        # # Avoid deadlock by preventing that the all pads are occupied by landing vehicles
+        # if operation == 0:
+        #     if self.get_num_landing_processing() >= self.instance.num_pad - 1:
+        #         return False
+        #
+        # # Avoid deadlock by preventing that the all buffers are occupied by buffer-in vehicles when unified buffer is used
+        # if self.instance.is_unified_buffer:
+        #     if operation == 1:
+        #         if self.get_num_buffer_in_processing() >= self.instance.num_buffer - 1:
+        #             return False
 
         processing_time = self.instance.proc[operation][vehicle_id][local_idx]
         return processing_time >= 0
-
-    def assign_vehicle_to_resource_at_future_time(self, vehicle_id: int, resource_id: int, operation: int,
-                                                  future_time: float, interval_start_deadlock_avoidance: List[float],
-                                                  interval_finish_deadlock_avoidance: List[float]) -> bool:
-        """
-        Assign a vehicle to a resource for an operation.
-        Returns True if assignment successful, False otherwise.
-        """
-        if not self.can_assign_vehicle_to_resource(vehicle_id, resource_id, operation, interval_start_deadlock_avoidance, interval_finish_deadlock_avoidance):
-            return False
-
-        vehicle = self.vehicles[vehicle_id]
-
-        # Calculate when operation can start
-        start_time = future_time
-
-        # Schedule operation start
-        start_event = Event(
-            time=start_time,
-            event_type=EventType.OPERATION_START,
-            vehicle_id=vehicle_id,
-            resource_id=resource_id,
-            operation_id=operation
-        )
-        heapq.heappush(self.event_queue, start_event)
-
-        # get processing time for vehicle, resource combination
-
-        return True
-
-    def assign_vehicle_to_resource_now(self, vehicle_id: int, resource_id: int,
-                                       operation: int, interval_start_deadlock_avoidance: List[float],
-                                       interval_finish_deadlock_avoidance: List[float]) -> bool:  # TODO : allocate resource to the vehicle at the future time
-        """
-        Assign a vehicle to a resource for an operation.
-        Returns True if assignment successful, False otherwise.
-        """
-
-        return self.assign_vehicle_to_resource_at_future_time(vehicle_id, resource_id, operation, self.current_time, interval_start_deadlock_avoidance, interval_finish_deadlock_avoidance)

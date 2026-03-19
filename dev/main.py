@@ -93,13 +93,13 @@ if __name__ == "__main__":
     ### For test with non-zero disturbance (different results between run and solve are expected) ###
     # scenario_RHC_config = ScenarioRHCConfig(scheduling_horizon_length=30.0, update_interval=1.0, operation_hour=18,
     #                                         num_vehicles_per_hour=12, ETA_ready_diff=[5.0, 5.0, 5.0], proc_gate_v=[5.0, 6.0, 9.0, 10.0],
-    #                                         disturbance_proc=[[-0.2, 1.0, 0.2], [-1.0, 3.0, 0.0], [-0.2, 1.0, 0.2]],
+    #                                         disturbance_proc=[[-0.2, 1.0, 0.0], [-1.0, 3.0, 0.0], [-0.2, 1.0, 0.0]],
     #                                         disturbance_ready=[-1.0, 5.0, 1.0], is_unified_buffer=True, num_pad=2,
     #                                         num_buffer=2, num_gate=8)
     ### For test with dynamic arrival and processing ###
     # scenario_RHC_config = ScenarioRHCConfig(scheduling_horizon_length=30.0, update_interval=1.0, operation_hour=18,
     #                                         num_vehicles_per_hour=18, ETA_ready_diff=[5.0, 5.0, 5.0], proc_gate_v=[5.0, 6.0, 9.0, 10.0],
-    #                                         disturbance_proc=[[-0.2, 1.0, 0.2], [-1.0, 3.0, 0.0], [-0.2, 1.0, 0.2]],
+    #                                         disturbance_proc=[[-0.2, 1.0, 0.0], [-1.0, 3.0, 0.0], [-0.2, 1.0, 0.0]],
     #                                         disturbance_ready=[-3.0, 10.0, 1.0], is_unified_buffer=True, num_pad=3,
     #                                         num_buffer=3, num_gate=12,
     #                                         dynamic_arrival_v_id=[98, 77, 66, 111, 71, 61, 138, 225, 89, 48, 93, 38, 2, 7, 52],
@@ -178,22 +178,22 @@ if __name__ == "__main__":
     # visualize_gantt_plotly(solution, RHC_info["activated_vehicle_id_true"], [], [], None, 'show', 570.0)
 
     ## For Debugging of RHC Implementation (schedule) ###
-    # with open('log_data/instance_exp_696.0.pkl', 'rb') as file:
+    # with open('log_data/instance_exp_58.0.pkl', 'rb') as file:
     #     instance_from_scenario_exp = pickle.load(file)
-    # with open('log_data/RHC_info_695.0.pkl', 'rb') as file:
+    # with open('log_data/RHC_info_57.0.pkl', 'rb') as file:
     #     RHC_info = pickle.load(file)
     # solution = solve(instance_from_scenario_exp, solver="exact", is_numerical_exp=True,
     #                  processing_vehicles_op=RHC_info["processing_vehicles_op"], processing_vehicles_res=RHC_info["processing_vehicles_res"],
-    #                  horizon_start=696.0, obj_option="vehicle_wise_max", scheduler_runtime_limit=10.0)
+    #                  horizon_start=58.0, obj_option="vehicle_wise_max", scheduler_runtime_limit=10.0)
     # # visualize_gantt(solution, activated_vehicle_id_true, [], [], None, 'show')
-    # visualize_gantt_plotly(solution, instance_from_scenario_exp, [], [], None, 'show', 696.0)
+    # visualize_gantt_plotly(solution, list(range(instance_from_scenario_exp.num_vehicles)), [], [], None, 'show', 58.0)
 
     ### RHC Execution (obj_option: "weighted_sum", "vehicle_wise_max", "weighted_sum_of_max") ###
     # final_solution, num_is_runtime_over_true, num_is_solution_exist_false = RHC(scenario_RHC_config, scenario_exp, scenario_true, obj_option="vehicle_wise_max", is_file_gen=True, is_result_file_gen=True, scheduler_runtime_limit=10.0, result_dir=None)
 
 
     #################### Numerical Study for Stochastic Full-Day Multi-Horizon Cases ####################
-    exp_RHC_config = ExperimentRHCConfig(num_vehicles_pad_buffer_gate_exp=[[12, 2, 8], [18, 3, 12], [24, 4, 16]],
+    exp_RHC_config = ExperimentRHCConfig(num_vehicles_pad_buffer_gate_exp=[[24, 4, 16], [18, 3, 12], [12, 2, 8]],
                                          proc_gate_v_exp=[[15.0, 17.0, 23.0, 25.0], [5.0, 6.0, 9.0, 10.0]],
                                          uncertainty_level_exp=[1, 2, 3],
                                          scheduling_horizon_length_exp=[20.0, 30.0, 40.0],

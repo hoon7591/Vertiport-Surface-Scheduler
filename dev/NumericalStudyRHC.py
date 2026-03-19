@@ -73,6 +73,20 @@ def _scenario_filename(rhc_config, uncertainty_level, exp_or_true):
         )
 
 
+def _scenario_rhc_config_filename(rhc_config, uncertainty_level):
+    return (
+        f"scenario_RHC_config"
+        f"_v{rhc_config.num_vehicles_per_hour}"
+        f"_pad{rhc_config.num_pad}"
+        f"_buffer{rhc_config.num_buffer}"
+        f"_gate{rhc_config.num_gate}"
+        f"_uncertainty{uncertainty_level}"
+        f"_horizon{rhc_config.scheduling_horizon_length}"
+        f"_update{rhc_config.update_interval}"
+        f"_seed{rhc_config.seed}.pkl"
+    )
+
+
 def load_scenarios(exp_path, true_path, seed):
     with exp_path.open("rb") as f:
         scenario_exp = pickle.load(f)
@@ -122,6 +136,7 @@ def Numerical_Experiment_RHC(exp_config: ExperimentRHCConfig = ExperimentRHCConf
         [exp_config.proc_gate_v_exp[1], exp_config.uncertainty_level_exp[2],
          exp_config.scheduling_horizon_length_exp[2], exp_config.update_interval_exp[0]],
     ]
+    operation_hour = 18
 
     for cfg_list in exp_config.num_vehicles_pad_buffer_gate_exp:
         pads = cfg_list[-2]
@@ -131,6 +146,7 @@ def Numerical_Experiment_RHC(exp_config: ExperimentRHCConfig = ExperimentRHCConf
 
         for i in range(len(vehicles_list)):
             num_vehicles_per_hour = vehicles_list[i]
+            total_vehicles = num_vehicles_per_hour * operation_hour
 
             for exp_point in exp_point_list:
                 proc_gate_v = exp_point[0]
@@ -140,9 +156,9 @@ def Numerical_Experiment_RHC(exp_config: ExperimentRHCConfig = ExperimentRHCConf
 
                 # Disturbance range depends on uncertainty level
                 if uncertainty_level == 1:
-                    disturbance_ready = [-1.0, 5.0, 1.0]
+                    disturbance_ready = [-1.0, 5.0, 0.0]
                 else:
-                    disturbance_ready = [-3.0, 10.0, 1.0]
+                    disturbance_ready = [-3.0, 10.0, 0.0]
 
                 for iter in range(exp_config.iter):
                     seed = iter + 42
@@ -150,22 +166,60 @@ def Numerical_Experiment_RHC(exp_config: ExperimentRHCConfig = ExperimentRHCConf
 
                     # Build scenario configuration
                     if uncertainty_level == 3:
-                        scenario_RHC_config = ScenarioRHCConfig(
-                            seed=seed,
-                            num_vehicles_per_hour=num_vehicles_per_hour,
-                            num_pad=pads,
-                            num_buffer=buffers,
-                            num_gate=gates,
-                            is_unified_buffer=True,
-                            proc_gate_v=proc_gate_v,
-                            disturbance_ready=disturbance_ready,
-                            scheduling_horizon_length=scheduling_horizon_length,
-                            update_interval=update_interval,
-                            dynamic_arrival_v_id=[98, 77, 66, 111, 71, 61, 138, 225, 89, 48, 93, 38, 2, 7, 52],
-                            dynamic_proc_v_id=[99, 117, 78, 8, 35, 150],
-                            dynamic_proc_op=[2, 2, 2, 4, 0, 2],
-                            dynamic_proc_inc_time=[10.0, 15.0, 10.0, 5.0, 7.0, 20.0],
-                        )
+                        if num_vehicles_per_hour == 12:
+                            scenario_RHC_config = ScenarioRHCConfig(
+                                seed=seed,
+                                num_vehicles_per_hour=num_vehicles_per_hour,
+                                num_pad=pads,
+                                num_buffer=buffers,
+                                num_gate=gates,
+                                is_unified_buffer=True,
+                                proc_gate_v=proc_gate_v,
+                                disturbance_ready=disturbance_ready,
+                                scheduling_horizon_length=scheduling_horizon_length,
+                                update_interval=update_interval,
+                                operation_hour=operation_hour,
+                                dynamic_arrival_v_id=np.random.choice(total_vehicles, size=int(round(total_vehicles * 0.1)), replace=False).tolist(),
+                                dynamic_proc_v_id=[99, 117, 78, 8, 35, 150],
+                                dynamic_proc_op=[2, 2, 2, 4, 0, 2],
+                                dynamic_proc_inc_time=[10.0, 15.0, 10.0, 3.0, 5.0, 20.0],
+                            )
+                        elif num_vehicles_per_hour == 18:
+                            scenario_RHC_config = ScenarioRHCConfig(
+                                seed=seed,
+                                num_vehicles_per_hour=num_vehicles_per_hour,
+                                num_pad=pads,
+                                num_buffer=buffers,
+                                num_gate=gates,
+                                is_unified_buffer=True,
+                                proc_gate_v=proc_gate_v,
+                                disturbance_ready=disturbance_ready,
+                                scheduling_horizon_length=scheduling_horizon_length,
+                                update_interval=update_interval,
+                                operation_hour=operation_hour,
+                                dynamic_arrival_v_id=np.random.choice(total_vehicles, size=int(round(total_vehicles * 0.1)), replace=False).tolist(),
+                                dynamic_proc_v_id=[99, 117, 78, 8, 35, 150, 100, 118, 79],
+                                dynamic_proc_op=[2, 2, 2, 4, 0, 2, 2, 2, 2],
+                                dynamic_proc_inc_time=[10.0, 15.0, 10.0, 3.0, 5.0, 20.0, 10.0, 15.0, 10.0],
+                            )
+                        elif num_vehicles_per_hour == 24:
+                            scenario_RHC_config = ScenarioRHCConfig(
+                                seed=seed,
+                                num_vehicles_per_hour=num_vehicles_per_hour,
+                                num_pad=pads,
+                                num_buffer=buffers,
+                                num_gate=gates,
+                                is_unified_buffer=True,
+                                proc_gate_v=proc_gate_v,
+                                disturbance_ready=disturbance_ready,
+                                scheduling_horizon_length=scheduling_horizon_length,
+                                update_interval=update_interval,
+                                operation_hour=operation_hour,
+                                dynamic_arrival_v_id=np.random.choice(total_vehicles, size=int(round(total_vehicles * 0.1)), replace=False).tolist(),
+                                dynamic_proc_v_id=[99, 117, 78, 8, 35, 150, 100, 118, 79, 9, 36, 151],
+                                dynamic_proc_op=[2, 2, 2, 4, 0, 2, 2, 2, 2, 4, 0, 2],
+                                dynamic_proc_inc_time=[10.0, 15.0, 10.0, 3.0, 5.0, 20.0, 10.0, 15.0, 10.0, 3.0, 5.0, 20.0],
+                            )
                     else:
                         scenario_RHC_config = ScenarioRHCConfig(
                             seed=seed,
@@ -178,6 +232,7 @@ def Numerical_Experiment_RHC(exp_config: ExperimentRHCConfig = ExperimentRHCConf
                             disturbance_ready=disturbance_ready,
                             scheduling_horizon_length=scheduling_horizon_length,
                             update_interval=update_interval,
+                            operation_hour=operation_hour,
                         )
 
                     upper_dir = Path("Numerical_Experiment_RHC_Result_Files")
@@ -213,13 +268,17 @@ def Numerical_Experiment_RHC(exp_config: ExperimentRHCConfig = ExperimentRHCConf
                     # Save scenarios
                     scenario_exp_filename = _scenario_filename(scenario_RHC_config, uncertainty_level, "exp")
                     scenario_true_filename = _scenario_filename(scenario_RHC_config, uncertainty_level, "true")
+                    scenario_rhc_config_filename = _scenario_rhc_config_filename(scenario_RHC_config, uncertainty_level)
                     scenario_exp_path = scenarios_root / scenario_exp_filename
                     scenario_true_path = scenarios_root / scenario_true_filename
+                    scenario_rhc_config_path = scenarios_root / scenario_rhc_config_filename
 
                     with scenario_exp_path.open("wb") as file:
                         pickle.dump(scenario_exp, file)
                     with scenario_true_path.open("wb") as file:
                         pickle.dump(scenario_true, file)
+                    with scenario_rhc_config_path.open("wb") as file:
+                        pickle.dump(scenario_RHC_config, file)
 
                     results = []
 
@@ -258,10 +317,6 @@ def Numerical_Experiment_RHC(exp_config: ExperimentRHCConfig = ExperimentRHCConf
                         "num_is_runtime_over_true": 0,
                         "num_is_solution_exist_false": 0,
                         "num_is_infeasible_true": 0,
-                        "interval_start_deadlock_avoidance": [],
-                        "interval_finish_deadlock_avoidance": [],
-                        "interval_start_infeasible_avoidance": [],
-                        "interval_finish_infeasible_avoidance": [],
                     })
                     results.append(stats)
 
@@ -301,10 +356,6 @@ def Numerical_Experiment_RHC(exp_config: ExperimentRHCConfig = ExperimentRHCConf
                         "num_is_runtime_over_true": 0,
                         "num_is_solution_exist_false": 0,
                         "num_is_infeasible_true": 0,
-                        "interval_start_deadlock_avoidance": [],
-                        "interval_finish_deadlock_avoidance": [],
-                        "interval_start_infeasible_avoidance": [],
-                        "interval_finish_infeasible_avoidance": [],
                     })
                     results.append(stats)
 
@@ -318,20 +369,15 @@ def Numerical_Experiment_RHC(exp_config: ExperimentRHCConfig = ExperimentRHCConf
                     num_is_runtime_over_true = 0
                     num_is_solution_exist_false = 0
                     num_is_infeasible_true = 0
-                    interval_start_deadlock_avoidance = []
-                    interval_finish_deadlock_avoidance = []
-                    interval_start_infeasible_avoidance = []
-                    interval_finish_infeasible_avoidance = []
 
                     scenario_exp, scenario_true = load_scenarios(scenario_exp_path, scenario_true_path, seed)
-                    solution, num_is_runtime_over_true, num_is_solution_exist_false, num_is_infeasible_true, \
-                        interval_start_deadlock_avoidance, interval_finish_deadlock_avoidance, \
-                        interval_start_infeasible_avoidance, interval_finish_infeasible_avoidance = RHC(
+                    solution, num_is_runtime_over_true, num_is_solution_exist_false, num_is_infeasible_true\
+                        = RHC(
                             scenario_RHC_config,
                             scenario_exp,
                             scenario_true,
                             obj_option="weighted_sum",
-                            is_file_gen=True,
+                            is_file_gen=False,
                             is_result_file_gen=True,
                             scheduler_runtime_limit=10.0,
                             result_dir=result_dir
@@ -358,10 +404,6 @@ def Numerical_Experiment_RHC(exp_config: ExperimentRHCConfig = ExperimentRHCConf
                         "num_is_runtime_over_true": num_is_runtime_over_true,
                         "num_is_solution_exist_false": num_is_solution_exist_false,
                         "num_is_infeasible_true": num_is_infeasible_true,
-                        "interval_start_deadlock_avoidance": interval_start_deadlock_avoidance,
-                        "interval_finish_deadlock_avoidance": interval_finish_deadlock_avoidance,
-                        "interval_start_infeasible_avoidance": interval_start_infeasible_avoidance,
-                        "interval_finish_infeasible_avoidance": interval_finish_infeasible_avoidance,
                     })
 
                     _append_csv_rows(csv_path, [stats])
@@ -374,20 +416,15 @@ def Numerical_Experiment_RHC(exp_config: ExperimentRHCConfig = ExperimentRHCConf
                     num_is_runtime_over_true = 0
                     num_is_solution_exist_false = 0
                     num_is_infeasible_true = 0
-                    interval_start_deadlock_avoidance = []
-                    interval_finish_deadlock_avoidance = []
-                    interval_start_infeasible_avoidance = []
-                    interval_finish_infeasible_avoidance = []
 
                     scenario_exp, scenario_true = load_scenarios(scenario_exp_path, scenario_true_path, seed)
-                    solution, num_is_runtime_over_true, num_is_solution_exist_false, num_is_infeasible_true, \
-                        interval_start_deadlock_avoidance, interval_finish_deadlock_avoidance, \
-                        interval_start_infeasible_avoidance, interval_finish_infeasible_avoidance = RHC(
+                    solution, num_is_runtime_over_true, num_is_solution_exist_false, num_is_infeasible_true \
+                        = RHC(
                             scenario_RHC_config,
                             scenario_exp,
                             scenario_true,
                             obj_option="vehicle_wise_max",
-                            is_file_gen=True,
+                            is_file_gen=False,
                             is_result_file_gen=True,
                             scheduler_runtime_limit=10.0,
                             result_dir=result_dir
@@ -414,10 +451,6 @@ def Numerical_Experiment_RHC(exp_config: ExperimentRHCConfig = ExperimentRHCConf
                         "num_is_runtime_over_true": num_is_runtime_over_true,
                         "num_is_solution_exist_false": num_is_solution_exist_false,
                         "num_is_infeasible_true": num_is_infeasible_true,
-                        "interval_start_deadlock_avoidance": interval_start_deadlock_avoidance,
-                        "interval_finish_deadlock_avoidance": interval_finish_deadlock_avoidance,
-                        "interval_start_infeasible_avoidance": interval_start_infeasible_avoidance,
-                        "interval_finish_infeasible_avoidance": interval_finish_infeasible_avoidance,
                     })
 
                     _append_csv_rows(csv_path, [stats])
