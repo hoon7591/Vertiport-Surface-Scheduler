@@ -502,6 +502,8 @@ class Scenario:
 
         ST_rounded_in_horizon = {k: round_nested_list(v, digits=2) for k, v in ST_in_horizon.items()}
 
+        M = (scheduling_horizon[1] - scheduling_horizon[0]) + 100.0
+
         return Instance(
             scenario_exp.seed, scenario_exp.num_operations, len(activated_vehicle_id_exp), scenario_exp.num_pad, scenario_exp.num_buffer_in,
             scenario_exp.num_gate, scenario_exp.num_buffer_out, scenario_exp.num_buffer, scenario_exp.num_resource, scenario_exp.objective_weights,
@@ -509,7 +511,7 @@ class Scenario:
             scenario_exp.maximum_arrival_time, scenario_exp.ETA_ready_diff, scenario_exp.lambda_beta_pert, scenario_exp.ETD_margin,
             scenario_exp.gate_close_margin, scenario_exp.is_unified_buffer, ready_in_horizon_exp, proc_in_horizon,
             vehicle_planned_arrival_times_in_horizon, vehicle_planned_departure_times_in_horizon, vehicle_planned_gate_close_times_in_horizon,
-            ST_rounded_in_horizon, vehicle_type_in_horizon, scenario_exp.big_M
+            ST_rounded_in_horizon, vehicle_type_in_horizon, M
         ), activated_vehicle_id_exp, ready_in_horizon_vehicle_id_exp
 
     @classmethod
