@@ -74,13 +74,13 @@ if __name__ == "__main__":
 
 
     #################### Numerical Study for Deterministic Single Horizon Cases ####################
-    # exp_config = ExperimentConfig(num_vehicles_pad_buffer_gate_exp=[[30, 3, 12], [32, 40, 4, 16]],
-    #                               proc_gate_v_exp=[[15.0, 17.0, 23.0, 25.0], [5.0, 6.0, 9.0, 10.0]],
-    #                               ETD_margin_exp=[5.0], gate_close_margin_exp=[3.0],
-    #                               ETA_ready_diff_range_exp=[[5.0, 5.0, 5.0]],
-    #                               is_unified_buffer_exp=[True], ready_max=100.0,
-    #                               scheduler_runtime_limit=100.0, iter=300)
-    # Numerical_Experiment(exp_config)
+    exp_config = ExperimentConfig(num_vehicles_pad_buffer_gate_exp=[[16, 20, 2, 8], [24, 30, 3, 12], [32, 40, 4, 16]],
+                                  proc_gate_v_exp=[[15.0, 20.0, 25.0, 30.0], [7.0, 10.0, 12.0, 15.0]],
+                                  ETD_margin_exp=[5.0], gate_close_margin_exp=[3.0],
+                                  ETA_ready_diff_range_exp=[[5.0, 5.0, 5.0]],
+                                  is_unified_buffer_exp=[True], ready_max=100.0,
+                                  scheduler_runtime_limit=100.0, iter=300)
+    Numerical_Experiment(exp_config)
 
 
     #################### Scenario Generation ####################
@@ -194,7 +194,7 @@ if __name__ == "__main__":
 
     #################### Numerical Study for Stochastic Full-Day Multi-Horizon Cases ####################
     exp_RHC_config = ExperimentRHCConfig(num_vehicles_pad_buffer_gate_exp=[[24, 4, 16], [18, 3, 12], [12, 2, 8]],
-                                         proc_gate_v_exp=[[15.0, 17.0, 23.0, 25.0], [5.0, 6.0, 9.0, 10.0]],
+                                         proc_gate_v_exp=[[15.0, 20.0, 25.0, 30.0], [7.0, 10.0, 12.0, 15.0]],
                                          uncertainty_level_exp=[1, 2, 3],
                                          scheduling_horizon_length_exp=[20.0, 30.0, 40.0],
                                          update_interval_exp=[1.0, 2.0, 3.0],

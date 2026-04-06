@@ -502,7 +502,7 @@ class Scenario:
 
         ST_rounded_in_horizon = {k: round_nested_list(v, digits=2) for k, v in ST_in_horizon.items()}
 
-        M = (scheduling_horizon[1] - scheduling_horizon[0]) + 100.0
+        M = (scheduling_horizon[1] - scheduling_horizon[0]) + 300.0
 
         return Instance(
             scenario_exp.seed, scenario_exp.num_operations, len(activated_vehicle_id_exp), scenario_exp.num_pad, scenario_exp.num_buffer_in,

@@ -45,9 +45,8 @@ class ExperimentRHCConfig:
     iter: int = 1
 
 
-def _scenario_filename(rhc_config, uncertainty_level, exp_or_true):
-    # If max(proc_gate_v) <= 10.0 => "FastCharge" else "SlowCharge"
-    if max(rhc_config.proc_gate_v) <= 10.0:
+def _scenario_filename(exp_config, rhc_config, uncertainty_level, exp_or_true):
+    if max(rhc_config.proc_gate_v) == min(max(sub) for sub in exp_config.proc_gate_v_exp):
         return (
             f"scenario_{exp_or_true}"
             f"_v{rhc_config.num_vehicles_per_hour}"
@@ -237,7 +236,7 @@ def Numerical_Experiment_RHC(exp_config: ExperimentRHCConfig = ExperimentRHCConf
 
                     upper_dir = Path("Numerical_Experiment_RHC_Result_Files")
                     upper_dir.mkdir(parents=True, exist_ok=True)
-                    if max(scenario_RHC_config.proc_gate_v) <= 10.0:
+                    if max(scenario_RHC_config.proc_gate_v) == min(max(sub) for sub in exp_config.proc_gate_v_exp):
                         lower_dir = Path(f"v{scenario_RHC_config.num_vehicles_per_hour}"
                                          f"_pad{scenario_RHC_config.num_pad}"
                                          f"_buffer{scenario_RHC_config.num_buffer}"
@@ -266,8 +265,8 @@ def Numerical_Experiment_RHC(exp_config: ExperimentRHCConfig = ExperimentRHCConf
                     scenario_true.bridge_rng = np.random.default_rng(seed + 10000)
 
                     # Save scenarios
-                    scenario_exp_filename = _scenario_filename(scenario_RHC_config, uncertainty_level, "exp")
-                    scenario_true_filename = _scenario_filename(scenario_RHC_config, uncertainty_level, "true")
+                    scenario_exp_filename = _scenario_filename(exp_config, scenario_RHC_config, uncertainty_level, "exp")
+                    scenario_true_filename = _scenario_filename(exp_config, scenario_RHC_config, uncertainty_level, "true")
                     scenario_rhc_config_filename = _scenario_rhc_config_filename(scenario_RHC_config, uncertainty_level)
                     scenario_exp_path = scenarios_root / scenario_exp_filename
                     scenario_true_path = scenarios_root / scenario_true_filename
@@ -289,6 +288,19 @@ def Numerical_Experiment_RHC(exp_config: ExperimentRHCConfig = ExperimentRHCConf
                         scenario_true, 1500.0
                     )
                     solution = solve(instance_from_scenario_true, solver="FCFS_heuristic", is_numerical_exp=True)
+
+                    v_id_nominal_proc = list(range(total_vehicles))
+                    dynamic_proc_v_id_set = set(scenario_RHC_config.dynamic_proc_v_id)
+                    v_id_nominal_proc = [v_id for v_id in v_id_nominal_proc if v_id not in dynamic_proc_v_id_set]
+                    vehicle_wise_weighted_tardiness_nominal = solution.vehicle_wise_weighted_tardiness[v_id_nominal_proc]
+                    solution.total_weighted_sum_tardiness_nominal = np.sum(vehicle_wise_weighted_tardiness_nominal)
+                    solution.max_arrival_tardiness_nominal = np.max(solution.arrival_time_tardiness[v_id_nominal_proc])
+                    solution.max_departure_tardiness_nominal = np.max(solution.departure_time_tardiness[v_id_nominal_proc])
+                    solution.max_vehicle_wise_weighted_tardiness_nominal = np.max(vehicle_wise_weighted_tardiness_nominal)
+                    solution.std_vehicle_wise_weighted_tardiness_nominal = np.std(vehicle_wise_weighted_tardiness_nominal)
+                    solution.cv_vehicle_wise_weighted_tardiness_nominal = solution.std_vehicle_wise_weighted_tardiness_nominal / np.mean(vehicle_wise_weighted_tardiness_nominal) if np.mean(vehicle_wise_weighted_tardiness_nominal) > 0 else 0
+                    solution.gini_vehicle_wise_weighted_tardiness_nominal = (np.sum(np.abs(vehicle_wise_weighted_tardiness_nominal[:, None] - vehicle_wise_weighted_tardiness_nominal)) / (2 * total_vehicles * np.sum(vehicle_wise_weighted_tardiness_nominal))) if total_vehicles > 0 and np.mean(vehicle_wise_weighted_tardiness_nominal) > 0 else 0
+
                     path = result_dir / f"FCFS_heuristic_final_solution.pkl"
                     with path.open('wb') as file:
                         pickle.dump(solution, file)
@@ -296,7 +308,7 @@ def Numerical_Experiment_RHC(exp_config: ExperimentRHCConfig = ExperimentRHCConf
                     visualize_gantt_plotly(solution, activated_vehicle_id_true, [], [], None, 'save', None, result_dir)
                     stats = solution.get_summary_stats()
 
-                    if max(proc_gate_v) <= 10.0:
+                    if max(proc_gate_v) == min(max(sub) for sub in exp_config.proc_gate_v_exp):
                         stats.update({"charge_type": "Fast"})
                     else:
                         stats.update({"charge_type": "Slow"})
@@ -328,6 +340,19 @@ def Numerical_Experiment_RHC(exp_config: ExperimentRHCConfig = ExperimentRHCConf
                         scenario_true, 1500.0
                     )
                     solution = solve(instance_from_scenario_true, solver="FCFS_heuristic_random", is_numerical_exp=True)
+
+                    v_id_nominal_proc = list(range(total_vehicles))
+                    dynamic_proc_v_id_set = set(scenario_RHC_config.dynamic_proc_v_id)
+                    v_id_nominal_proc = [v_id for v_id in v_id_nominal_proc if v_id not in dynamic_proc_v_id_set]
+                    vehicle_wise_weighted_tardiness_nominal = solution.vehicle_wise_weighted_tardiness[v_id_nominal_proc]
+                    solution.total_weighted_sum_tardiness_nominal = np.sum(vehicle_wise_weighted_tardiness_nominal)
+                    solution.max_arrival_tardiness_nominal = np.max(solution.arrival_time_tardiness[v_id_nominal_proc])
+                    solution.max_departure_tardiness_nominal = np.max(solution.departure_time_tardiness[v_id_nominal_proc])
+                    solution.max_vehicle_wise_weighted_tardiness_nominal = np.max(vehicle_wise_weighted_tardiness_nominal)
+                    solution.std_vehicle_wise_weighted_tardiness_nominal = np.std(vehicle_wise_weighted_tardiness_nominal)
+                    solution.cv_vehicle_wise_weighted_tardiness_nominal = solution.std_vehicle_wise_weighted_tardiness_nominal / np.mean(vehicle_wise_weighted_tardiness_nominal) if np.mean(vehicle_wise_weighted_tardiness_nominal) > 0 else 0
+                    solution.gini_vehicle_wise_weighted_tardiness_nominal = (np.sum(np.abs(vehicle_wise_weighted_tardiness_nominal[:, None] - vehicle_wise_weighted_tardiness_nominal)) / (2 * total_vehicles * np.sum(vehicle_wise_weighted_tardiness_nominal))) if total_vehicles > 0 and np.mean(vehicle_wise_weighted_tardiness_nominal) > 0 else 0
+
                     path = result_dir / f"FCFS_heuristic_random_final_solution.pkl"
                     with path.open('wb') as file:
                         pickle.dump(solution, file)
@@ -335,7 +360,7 @@ def Numerical_Experiment_RHC(exp_config: ExperimentRHCConfig = ExperimentRHCConf
                     visualize_gantt_plotly(solution, activated_vehicle_id_true, [], [], None, 'save', None, result_dir)
                     stats = solution.get_summary_stats()
 
-                    if max(proc_gate_v) <= 10.0:
+                    if max(proc_gate_v) == min(max(sub) for sub in exp_config.proc_gate_v_exp):
                         stats.update({"charge_type": "Fast"})
                     else:
                         stats.update({"charge_type": "Slow"})
@@ -384,7 +409,7 @@ def Numerical_Experiment_RHC(exp_config: ExperimentRHCConfig = ExperimentRHCConf
                         )
                     stats = solution.get_summary_stats()
 
-                    if max(proc_gate_v) <= 10.0:
+                    if max(proc_gate_v) == min(max(sub) for sub in exp_config.proc_gate_v_exp):
                         stats.update({"charge_type": "Fast"})
                     else:
                         stats.update({"charge_type": "Slow"})
@@ -431,7 +456,7 @@ def Numerical_Experiment_RHC(exp_config: ExperimentRHCConfig = ExperimentRHCConf
                         )
                     stats = solution.get_summary_stats()
 
-                    if max(proc_gate_v) <= 10.0:
+                    if max(proc_gate_v) == min(max(sub) for sub in exp_config.proc_gate_v_exp):
                         stats.update({"charge_type": "Fast"})
                     else:
                         stats.update({"charge_type": "Slow"})

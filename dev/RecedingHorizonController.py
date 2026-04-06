@@ -166,6 +166,24 @@ def RHC(scenario_RHC_config, scenario_exp, scenario_true, obj_option, is_file_ge
 
         if len(snapshot['takeoff_finished_vehicles_by_t']) == scenario_exp.num_vehicles:
             final_solution = solution_run
+
+            v_id_nominal_proc = list(range(scenario_exp.num_vehicles))
+            dynamic_proc_v_id_set = set(scenario_RHC_config.dynamic_proc_v_id)
+            v_id_nominal_proc = [v_id for v_id in v_id_nominal_proc if v_id not in dynamic_proc_v_id_set]
+            vehicle_wise_weighted_tardiness_nominal = final_solution.vehicle_wise_weighted_tardiness[v_id_nominal_proc]
+            final_solution.total_weighted_sum_tardiness_nominal = np.sum(vehicle_wise_weighted_tardiness_nominal)
+            final_solution.max_arrival_tardiness_nominal = np.max(final_solution.arrival_time_tardiness[v_id_nominal_proc])
+            final_solution.max_departure_tardiness_nominal = np.max(final_solution.departure_time_tardiness[v_id_nominal_proc])
+            final_solution.max_vehicle_wise_weighted_tardiness_nominal = np.max(vehicle_wise_weighted_tardiness_nominal)
+            final_solution.std_vehicle_wise_weighted_tardiness_nominal = np.std(vehicle_wise_weighted_tardiness_nominal)
+            final_solution.cv_vehicle_wise_weighted_tardiness_nominal = final_solution.std_vehicle_wise_weighted_tardiness_nominal / np.mean(
+                vehicle_wise_weighted_tardiness_nominal) if np.mean(vehicle_wise_weighted_tardiness_nominal) > 0 else 0
+            final_solution.gini_vehicle_wise_weighted_tardiness_nominal = (np.sum(
+                np.abs(vehicle_wise_weighted_tardiness_nominal[:, None] - vehicle_wise_weighted_tardiness_nominal)) / (
+                                                                                 2 * scenario_exp.num_vehicles * np.sum(
+                                                                             vehicle_wise_weighted_tardiness_nominal))) if scenario_exp.num_vehicles > 0 and np.mean(
+                vehicle_wise_weighted_tardiness_nominal) > 0 else 0
+
             if is_result_file_gen:
                 if result_dir is not None:
                     path = result_dir / f"RHC_{obj_option}_final_solution.pkl"

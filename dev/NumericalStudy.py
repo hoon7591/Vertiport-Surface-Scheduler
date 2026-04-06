@@ -24,9 +24,9 @@ class ExperimentConfig:
     iter: int = 100  # number of iteration per case
 
 
-def _subfolder_name(num_vehicles, pads, buffers, gates, proc_gate_v, ETD_margin, GCM, ETA_ready_diff_range, unified):
+def _subfolder_name(exp_config, num_vehicles, pads, buffers, gates, proc_gate_v, ETD_margin, GCM, ETA_ready_diff_range, unified):
     if unified:
-        if max(proc_gate_v) <= 10.0:
+        if max(proc_gate_v) == min(max(sub) for sub in exp_config.proc_gate_v_exp):
             return (f"instance_v{num_vehicles}_pad{pads}"
                     f"_buffer{buffers}"
                     f"_gate{gates}_FastCharge_ETD_margin{ETD_margin}"
@@ -37,7 +37,7 @@ def _subfolder_name(num_vehicles, pads, buffers, gates, proc_gate_v, ETD_margin,
                     f"_gate{gates}_SlowCharge_ETD_margin{ETD_margin}"
                     f"_GCM{GCM}_ETA_ready_diff_range{ETA_ready_diff_range[0]}to{ETA_ready_diff_range[1]}at{ETA_ready_diff_range[2]}_unified{unified}")
     else:
-        if max(proc_gate_v) <= 10.0:
+        if max(proc_gate_v) == min(max(sub) for sub in exp_config.proc_gate_v_exp):
             return (f"instance_v{num_vehicles}_pad{pads}"
                     f"_bufferin{buffers}"
                     f"_bufferout{buffers}"
@@ -51,9 +51,9 @@ def _subfolder_name(num_vehicles, pads, buffers, gates, proc_gate_v, ETD_margin,
                     f"_GCM{GCM}_ETA_ready_diff_range{ETA_ready_diff_range[0]}to{ETA_ready_diff_range[1]}at{ETA_ready_diff_range[2]}_unified{unified}")
 
 
-def _instance_filename(num_vehicles, instance, ETD_margin, ETA_ready_diff_range, unified, seed, prob_idx):
+def _instance_filename(exp_config, num_vehicles, instance, ETD_margin, ETA_ready_diff_range, unified, seed, prob_idx):
     if unified:
-        if max(instance.proc_gate_v) <= 10.0:
+        if max(instance.proc_gate_v) == min(max(sub) for sub in exp_config.proc_gate_v_exp):
             return (f"instance_v{num_vehicles}_pad{instance.num_pad}"
                     f"_buffer{instance.num_buffer}"
                     f"_gate{instance.num_gate}_FastCharge_ETD_margin{ETD_margin}"
@@ -66,7 +66,7 @@ def _instance_filename(num_vehicles, instance, ETD_margin, ETA_ready_diff_range,
                     f"_GCM{instance.gate_close_margin}_ETA_ready_diff_range{ETA_ready_diff_range[0]}to{ETA_ready_diff_range[1]}at{ETA_ready_diff_range[2]}"
                     f"_unified{unified}_seed{seed}_prob{prob_idx}.pkl")
     else:
-        if max(instance.proc_gate_v) <= 10.0:
+        if max(instance.proc_gate_v) == min(max(sub) for sub in exp_config.proc_gate_v_exp):
             return (f"instance_v{num_vehicles}_pad{instance.num_pad}"
                     f"_bufferin{instance.num_buffer_in}"
                     f"_bufferout{instance.num_buffer_out}"
@@ -114,7 +114,7 @@ def Numerical_Experiment(exp_config: ExperimentConfig = ExperimentConfig()):
                         for unified in exp_config.is_unified_buffer_exp:
 
                             subfolder = _subfolder_name(
-                                num_vehicles, pads, buffers, gates, proc_gate_v,
+                                exp_config, num_vehicles, pads, buffers, gates, proc_gate_v,
                                 ETD_margin, GCM, ETA_ready_diff_range, unified
                             )
                             out_dir = instances_root / subfolder
@@ -159,7 +159,7 @@ def Numerical_Experiment(exp_config: ExperimentConfig = ExperimentConfig()):
 
                                 # ---- Save instance pickle ----
                                 pkl_name = _instance_filename(
-                                    num_vehicles, instance, ETD_margin, ETA_ready_diff_range, unified, seed, num_solved
+                                    exp_config, num_vehicles, instance, ETD_margin, ETA_ready_diff_range, unified, seed, num_solved
                                 )
                                 pkl_path = out_dir / pkl_name
                                 with pkl_path.open("wb") as fh:
@@ -190,7 +190,7 @@ def Numerical_Experiment(exp_config: ExperimentConfig = ExperimentConfig()):
                                         # write one row per successful solver immediately
                                         stats = solution.get_summary_stats()
                                         if config.is_unified_buffer:
-                                            if max(proc_gate_v) <= 10.0:
+                                            if max(proc_gate_v) == min(max(sub) for sub in exp_config.proc_gate_v_exp):
                                                 stats.update({"charge_type": "Fast"})
                                             else:
                                                 stats.update({"charge_type": "Slow"})
@@ -210,7 +210,7 @@ def Numerical_Experiment(exp_config: ExperimentConfig = ExperimentConfig()):
                                                 "prob_num": num_solved,
                                             })
                                         else:
-                                            if max(proc_gate_v) <= 10.0:
+                                            if max(proc_gate_v) == min(max(sub) for sub in exp_config.proc_gate_v_exp):
                                                 stats.update({"charge_type": "Fast"})
                                             else:
                                                 stats.update({"charge_type": "Slow"})
@@ -250,7 +250,7 @@ def Numerical_Experiment(exp_config: ExperimentConfig = ExperimentConfig()):
                                                 # write one row per successful solver immediately
                                                 stats = solution.get_summary_stats()
                                                 if config.is_unified_buffer:
-                                                    if max(proc_gate_v) <= 10.0:
+                                                    if max(proc_gate_v) == min(max(sub) for sub in exp_config.proc_gate_v_exp):
                                                         stats.update({"charge_type": "Fast"})
                                                     else:
                                                         stats.update({"charge_type": "Slow"})
@@ -268,7 +268,7 @@ def Numerical_Experiment(exp_config: ExperimentConfig = ExperimentConfig()):
                                                         "prob_num": num_solved,
                                                     })
                                                 else:
-                                                    if max(proc_gate_v) <= 10.0:
+                                                    if max(proc_gate_v) == min(max(sub) for sub in exp_config.proc_gate_v_exp):
                                                         stats.update({"charge_type": "Fast"})
                                                     else:
                                                         stats.update({"charge_type": "Slow"})

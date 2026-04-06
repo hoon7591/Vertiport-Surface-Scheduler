@@ -3,6 +3,7 @@ import numpy as np
 from typing import Dict, List, Any, Optional
 from Instance import Instance  # Ensure Instance is imported from its module
 
+
 class Solution:
     def __init__(
         self,
@@ -18,7 +19,7 @@ class Solution:
         resource_ind: List[List[int]],
         solver_type: str,
         objective_weights: List[float],
-        # Instance data for induced solution informations
+        # Instance data for induced solution information
         instance: Optional['Instance'] = None,
         is_deadlock: bool = False,
         is_runtime_over: bool = False,
@@ -140,20 +141,30 @@ class Solution:
         self.total_arrival_tardiness = np.sum(self.arrival_time_tardiness)
         self.total_departure_tardiness = np.sum(self.departure_time_tardiness)
         self.total_tardiness = self.total_arrival_tardiness + self.total_departure_tardiness
+        self.total_weighted_sum_tardiness = self.weights[0] * self.total_arrival_tardiness + self.weights[1] * self.total_departure_tardiness
         self.avg_arrival_tardiness = self.total_arrival_tardiness / self.num_vehicles if self.num_vehicles > 0 else 0
         self.avg_departure_tardiness = self.total_departure_tardiness / self.num_vehicles if self.num_vehicles > 0 else 0
         self.avg_total_tardiness = self.total_tardiness / self.num_vehicles if self.num_vehicles > 0 else 0
+        self.total_weighted_sum_tardiness_nominal = None
 
         # Max tardiness metrics
         self.max_arrival_tardiness = np.max(self.arrival_time_tardiness)
         self.max_departure_tardiness = np.max(self.departure_time_tardiness)
-        vehicle_wise_tardiness = self.arrival_time_tardiness + self.departure_time_tardiness
-        self.max_vehicle_wise_tardiness = np.max(vehicle_wise_tardiness)
+        self.vehicle_wise_weighted_tardiness = self.weights[0] * self.arrival_time_tardiness + self.weights[1] * self.departure_time_tardiness
+        self.max_vehicle_wise_weighted_tardiness = np.max(self.vehicle_wise_weighted_tardiness)
+        self.max_arrival_tardiness_nominal = None
+        self.max_departure_tardiness_nominal = None
+        self.max_vehicle_wise_weighted_tardiness_nominal = None
 
         # Fairness of tardiness metrics
-        self.std_vehicle_wise_tardiness = np.std(vehicle_wise_tardiness)
-        non_delayed_vehicles_mask = np.isclose(vehicle_wise_tardiness, 0.0, atol=1e-9)
+        self.std_vehicle_wise_weighted_tardiness = np.std(self.vehicle_wise_weighted_tardiness)
+        self.cv_vehicle_wise_weighted_tardiness = self.std_vehicle_wise_weighted_tardiness / np.mean(self.vehicle_wise_weighted_tardiness) if np.mean(self.vehicle_wise_weighted_tardiness) > 0 else 0
+        self.gini_vehicle_wise_weighted_tardiness = (np.sum(np.abs(self.vehicle_wise_weighted_tardiness[:, None] - self.vehicle_wise_weighted_tardiness)) / (2 * self.num_vehicles * np.sum(self.vehicle_wise_weighted_tardiness))) if self.num_vehicles > 0 and np.mean(self.vehicle_wise_weighted_tardiness) > 0 else 0
+        non_delayed_vehicles_mask = np.isclose(self.vehicle_wise_weighted_tardiness, 0.0, atol=1e-9)
         self.non_delayed_vehicles_rate = np.sum(non_delayed_vehicles_mask) / self.num_vehicles if self.num_vehicles > 0 else 0
+        self.std_vehicle_wise_weighted_tardiness_nominal = None
+        self.cv_vehicle_wise_weighted_tardiness_nominal = None
+        self.gini_vehicle_wise_weighted_tardiness_nominal = None
         
         # Resource utilization
         self.total_idle_time = np.zeros(self.num_resources)
@@ -258,7 +269,8 @@ class Solution:
     def get_summary_stats(self) -> Dict[str, float]:
         """Get summary statistics for the solution"""
         stats = {
-            'weighted_sum_tardiness': self.weights[0] * self.total_arrival_tardiness + self.weights[1] * self.total_departure_tardiness,
+            'total_weighted_sum_tardiness': self.total_weighted_sum_tardiness,
+            'total_weighted_sum_tardiness_nominal': self.total_weighted_sum_tardiness_nominal if self.total_weighted_sum_tardiness_nominal is not None else 'None',
             'runtime_seconds': self.solver_runtime,
             'total_arrival_tardiness': self.total_arrival_tardiness,
             'total_departure_tardiness': self.total_departure_tardiness,
@@ -268,9 +280,17 @@ class Solution:
             'avg_total_tardiness': (self.total_arrival_tardiness + self.total_departure_tardiness) / self.num_vehicles if self.num_vehicles is not None and self.num_vehicles > 0 else 0,
             'max_arrival_tardiness': self.max_arrival_tardiness,
             'max_departure_tardiness': self.max_departure_tardiness,
-            'sum_of_max_tardiness': self.max_arrival_tardiness + self.max_departure_tardiness,
-            'max_vehicle_wise_tardiness': self.max_vehicle_wise_tardiness,
-            'std_vehicle_wise_tardiness': self.std_vehicle_wise_tardiness,
+            'weighted_sum_of_max_tardiness': self.weights[0] * self.max_arrival_tardiness + self.weights[1] * self.max_departure_tardiness,
+            'max_vehicle_wise_tardiness': self.max_vehicle_wise_weighted_tardiness,
+            'max_arrival_tardiness_nominal': self.max_arrival_tardiness_nominal if self.max_arrival_tardiness_nominal is not None else 'None',
+            'max_departure_tardiness_nominal': self.max_departure_tardiness_nominal if self.max_departure_tardiness_nominal is not None else 'None',
+            'max_vehicle_wise_weighted_tardiness_nominal': self.max_vehicle_wise_weighted_tardiness_nominal if self.max_vehicle_wise_weighted_tardiness_nominal is not None else 'None',
+            'std_vehicle_wise_tardiness': self.std_vehicle_wise_weighted_tardiness,
+            'cv_vehicle_wise_weighted_tardiness': self.cv_vehicle_wise_weighted_tardiness,
+            'gini_vehicle_wise_weighted_tardiness': self.gini_vehicle_wise_weighted_tardiness,
+            'std_vehicle_wise_weighted_tardiness_nominal': self.std_vehicle_wise_weighted_tardiness_nominal if self.std_vehicle_wise_weighted_tardiness_nominal is not None else 'None',
+            'cv_vehicle_wise_weighted_tardiness_nominal': self.cv_vehicle_wise_weighted_tardiness_nominal if self.cv_vehicle_wise_weighted_tardiness_nominal is not None else 'None',
+            'gini_vehicle_wise_weighted_tardiness_nominal': self.gini_vehicle_wise_weighted_tardiness_nominal if self.gini_vehicle_wise_weighted_tardiness_nominal is not None else 'None',
             'total_vehicles': self.num_vehicles if self.num_vehicles is not None else 0,
             'solver': self.solver_type,
             'objective_option': self.objective_option if self.objective_option is not None else '',
