@@ -281,7 +281,7 @@ class Solution:
             'max_arrival_tardiness': self.max_arrival_tardiness,
             'max_departure_tardiness': self.max_departure_tardiness,
             'weighted_sum_of_max_tardiness': self.weights[0] * self.max_arrival_tardiness + self.weights[1] * self.max_departure_tardiness,
-            'max_vehicle_wise_tardiness': self.max_vehicle_wise_weighted_tardiness,
+            'max_vehicle_wise_weighted_tardiness': self.max_vehicle_wise_weighted_tardiness,
             'max_arrival_tardiness_nominal': self.max_arrival_tardiness_nominal if self.max_arrival_tardiness_nominal is not None else 'None',
             'max_departure_tardiness_nominal': self.max_departure_tardiness_nominal if self.max_departure_tardiness_nominal is not None else 'None',
             'max_vehicle_wise_weighted_tardiness_nominal': self.max_vehicle_wise_weighted_tardiness_nominal if self.max_vehicle_wise_weighted_tardiness_nominal is not None else 'None',
