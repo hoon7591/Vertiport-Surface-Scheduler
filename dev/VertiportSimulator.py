@@ -486,8 +486,12 @@ class VertiportSimulator:
 
         # Avoid deadlock by preventing that the all buffers are occupied by buffer-in vehicles when unified buffer is used
         if self.instance.is_unified_buffer:
-            if operation == 1:
+            if self.instance.num_buffer > 0 and operation == 1:
                 if self.get_num_buffer_in_processing() >= self.instance.num_buffer - 1:
+                    return False
+        else:
+            if self.instance.num_buffer_in > 0 and operation == 1:
+                if self.get_num_buffer_in_processing() >= self.instance.num_buffer_in - 1:
                     return False
 
         processing_time = self.instance.proc[operation][vehicle_id][local_idx]
@@ -1103,12 +1107,20 @@ class VertiportSimulator:
             elif operation == 2:
                 return VehicleState.TAKING_OFF if in_progress else VehicleState.WAITING_FOR_TAKEOFF_AT_BUFFER
         elif self.instance.num_operations == 4:  # With one buffer
-            if operation == 1:
-                return VehicleState.IN_BUFFER_IN if in_progress else VehicleState.WAITING_AFTER_LANDING
-            elif operation == 2:
-                return VehicleState.AT_GATE
-            elif operation == 3:
-                return VehicleState.TAKING_OFF if in_progress else VehicleState.WAITING_FOR_TAKEOFF_AT_BUFFER
+            if self.instance.num_buffer_in == 0:
+                if operation == 1:
+                    return VehicleState.AT_GATE
+                elif operation == 2:
+                    return VehicleState.IN_BUFFER_OUT if in_progress else VehicleState.WAITING_AFTER_GATE
+                elif operation == 3:
+                    return VehicleState.TAKING_OFF if in_progress else VehicleState.WAITING_FOR_TAKEOFF_AT_BUFFER
+            elif self.instance.num_buffer_out == 0:
+                if operation == 1:
+                    return VehicleState.IN_BUFFER_IN if in_progress else VehicleState.WAITING_AFTER_LANDING
+                elif operation == 2:
+                    return VehicleState.AT_GATE
+                elif operation == 3:
+                    return VehicleState.TAKING_OFF if in_progress else VehicleState.WAITING_FOR_TAKEOFF_AT_BUFFER
         elif self.instance.num_operations == 5:  # With both buffers
             if operation == 1:
                 return VehicleState.IN_BUFFER_IN if in_progress else VehicleState.WAITING_AFTER_LANDING
@@ -1338,8 +1350,12 @@ class VertiportSimulatorRecedingHorizon(VertiportSimulator):
         #
         # # Avoid deadlock by preventing that the all buffers are occupied by buffer-in vehicles when unified buffer is used
         # if self.instance.is_unified_buffer:
-        #     if operation == 1:
+        #     if self.instance.num_buffer > 0 and operation == 1:
         #         if self.get_num_buffer_in_processing() >= self.instance.num_buffer - 1:
+        #             return False
+        # else:
+        #     if self.instance.num_buffer_in > 0 and operation == 1:
+        #         if self.get_num_buffer_in_processing() >= self.instance.num_buffer_in - 1:
         #             return False
 
         processing_time = self.instance.proc[operation][vehicle_id][local_idx]

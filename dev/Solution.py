@@ -193,18 +193,32 @@ class Solution:
             self.effective_occupation_rate[r] = (self.total_processing_time[r] / self.total_occupation_time[r]) * 100 if self.total_occupation_time[r] > 0 else 0
             self.ineffective_occupation_rate[r] = (self.total_unconstrained_waiting_time[r] / self.total_occupation_time[r]) * 100 if self.total_occupation_time[r] > 0 else 0
 
-        self.pad_resource_occupation_rate = np.mean(self.resource_occupation_rate[:self.num_pad]) if self.num_pad > 0 else 0
-        self.pad_effective_occupation_rate = np.mean(self.effective_occupation_rate[:self.num_pad]) if self.num_pad > 0 else 0
-        self.pad_ineffective_occupation_rate = np.mean(self.ineffective_occupation_rate[:self.num_pad]) if self.num_pad > 0 else 0
-        self.gate_resource_occupation_rate = np.mean(self.resource_occupation_rate[-self.num_gate:]) if self.num_gate > 0 else 0
-        self.gate_effective_occupation_rate = np.mean(self.effective_occupation_rate[-self.num_gate:]) if self.num_gate > 0 else 0
-        self.gate_ineffective_occupation_rate = np.mean(self.ineffective_occupation_rate[-self.num_gate:]) if self.num_gate > 0 else 0
+        if self.instance.is_unified_buffer:
+            if self.instance.num_buffer == 0:
+                gate_op_id = 1
+            else:
+                gate_op_id = 2
+        else:
+            if self.instance.num_buffer_in == 0:
+                gate_op_id = 1
+            else:
+                gate_op_id = 2
+        gate_resource_ids = np.arange(self.resource_ind[gate_op_id][0], self.resource_ind[gate_op_id][1], dtype=int)
+        pad_resource_ids = np.arange(self.resource_ind[0][0], self.resource_ind[0][1], dtype=int)
+        buffer_resource_ids = np.setdiff1d(np.arange(self.num_resources, dtype=int), np.union1d(pad_resource_ids, gate_resource_ids), assume_unique=True)
+
+        self.pad_resource_occupation_rate = np.mean(self.resource_occupation_rate[pad_resource_ids]) if self.num_pad > 0 else 0
+        self.pad_effective_occupation_rate = np.mean(self.effective_occupation_rate[pad_resource_ids]) if self.num_pad > 0 else 0
+        self.pad_ineffective_occupation_rate = np.mean(self.ineffective_occupation_rate[pad_resource_ids]) if self.num_pad > 0 else 0
+        self.gate_resource_occupation_rate = np.mean(self.resource_occupation_rate[gate_resource_ids]) if self.num_gate > 0 else 0
+        self.gate_effective_occupation_rate = np.mean(self.effective_occupation_rate[gate_resource_ids]) if self.num_gate > 0 else 0
+        self.gate_ineffective_occupation_rate = np.mean(self.ineffective_occupation_rate[gate_resource_ids]) if self.num_gate > 0 else 0
         self.total_resource_occupation_rate = np.mean(self.resource_occupation_rate) if self.num_resources > 0 else 0
         self.total_effective_occupation_rate = np.mean(self.effective_occupation_rate) if self.num_resources > 0 else 0
         self.total_ineffective_occupation_rate = np.mean(self.ineffective_occupation_rate) if self.num_resources > 0 else 0
-        self.pad_unconstrained_waiting_time = np.sum(self.total_unconstrained_waiting_time[:self.num_pad]) if self.num_pad > 0 else 0
-        self.gate_unconstrained_waiting_time = np.sum(self.total_unconstrained_waiting_time[-self.num_gate:]) if self.num_gate > 0 else 0
-        self.buffer_unconstrained_waiting_time = np.sum(self.total_unconstrained_waiting_time[self.num_pad:self.num_resources - self.num_gate]) if self.num_resources - self.num_pad - self.num_gate > 0 else 0
+        self.pad_unconstrained_waiting_time = np.sum(self.total_unconstrained_waiting_time[pad_resource_ids]) if self.num_pad > 0 else 0
+        self.gate_unconstrained_waiting_time = np.sum(self.total_unconstrained_waiting_time[gate_resource_ids]) if self.num_gate > 0 else 0
+        self.buffer_unconstrained_waiting_time = np.sum(self.total_unconstrained_waiting_time[buffer_resource_ids]) if self.num_resources - self.num_pad - self.num_gate > 0 else 0
         self.sum_total_unconstrained_waiting_time = np.sum(self.total_unconstrained_waiting_time) if self.num_resources > 0 else 0
 
         # Cost of delay index => Gate:Taxi:Airborne = 1:1.85:2.85

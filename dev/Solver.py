@@ -50,7 +50,7 @@ class SolverStrategy(ABC):
         T_d = model.addVars(num_vehicle, vtype=GRB.CONTINUOUS, lb=0, name="tardiness_departure")
 
         # Setup resource indices and add constraints
-        resource_ind = self._setup_resource_indices(instance)
+        resource_ind, landing_op_id, buffer_in_op_id, gate_op_id, buffer_out_op_id, takeoff_op_id = self._setup_resource_indices(instance)
         self._add_base_constraints(
             model,
             instance,
@@ -67,7 +67,7 @@ class SolverStrategy(ABC):
 
         return model, variables
 
-    def _setup_resource_indices(self, instance: Instance) -> List[List[int]]:
+    def _setup_resource_indices(self, instance: Instance) -> Tuple[List[List[int]], Optional[int], Optional[int], Optional[int], Optional[int], Optional[int]]:
         """Setup resource indices based on instance configuration."""
         num_pad = instance.num_pad
         num_buffer_in = instance.num_buffer_in
@@ -76,9 +76,18 @@ class SolverStrategy(ABC):
         num_buffer = instance.num_buffer
         is_unified_buffer = instance.is_unified_buffer
 
+        landing_op_id = None
+        buffer_in_op_id = None
+        gate_op_id = None
+        burfer_out_op_id = None
+        takeoff_op_id = None
+
         if is_unified_buffer:
             if num_buffer == 0:
                 resource_ind = [[0, num_pad], [num_pad, num_pad + num_gate], [0, num_pad]]
+                landing_op_id = 0
+                gate_op_id = 1
+                takeoff_op_id = 2
             else:
                 resource_ind = [
                     [0, num_pad],
@@ -87,10 +96,18 @@ class SolverStrategy(ABC):
                     [num_pad, num_pad + num_buffer],
                     [0, num_pad],
                 ]
+                landing_op_id = 0
+                buffer_in_op_id = 1
+                gate_op_id = 2
+                buffer_out_op_id = 3
+                takeoff_op_id = 4
         else:
             if num_buffer_in == 0:
                 if num_buffer_out == 0:
                     resource_ind = [[0, num_pad], [num_pad, num_pad + num_gate], [0, num_pad]]
+                    landing_op_id = 0
+                    gate_op_id = 1
+                    takeoff_op_id = 2
                 else:
                     resource_ind = [
                         [0, num_pad],
@@ -98,6 +115,10 @@ class SolverStrategy(ABC):
                         [num_pad + num_gate, num_pad + num_gate + num_buffer_out],
                         [0, num_pad],
                     ]
+                    landing_op_id = 0
+                    gate_op_id = 1
+                    buffer_out_op_id = 2
+                    takeoff_op_id = 3
             else:
                 if num_buffer_out == 0:
                     resource_ind = [
@@ -106,6 +127,10 @@ class SolverStrategy(ABC):
                         [num_pad + num_buffer_in, num_pad + num_buffer_in + num_gate],
                         [0, num_pad],
                     ]
+                    landing_op_id = 0
+                    buffer_in_op_id = 1
+                    gate_op_id = 2
+                    takeoff_op_id = 3
                 else:
                     resource_ind = [
                         [0, num_pad],
@@ -115,7 +140,13 @@ class SolverStrategy(ABC):
                          num_pad + num_buffer_in + num_gate + num_buffer_out],
                         [0, num_pad],
                     ]
-        return resource_ind
+                    landing_op_id = 0
+                    buffer_in_op_id = 1
+                    gate_op_id = 2
+                    buffer_out_op_id = 3
+                    takeoff_op_id = 4
+
+        return resource_ind, landing_op_id, buffer_in_op_id, gate_op_id, buffer_out_op_id, takeoff_op_id
 
     def _add_base_constraints(
             self,
@@ -443,7 +474,7 @@ class ExactSolver(SolverStrategy):
         #     )
 
         # 🔹 RHC 모드일 때만, 현재 처리 중인 작업을 horizon_start 에 고정
-        resource_ind = self._setup_resource_indices(instance)
+        resource_ind, landing_op_id, buffer_in_op_id, gate_op_id, buffer_out_op_id, takeoff_op_id = self._setup_resource_indices(instance)
 
         if is_rhc:
             S, y, x = variables["S"], variables["y"], variables["x"]
@@ -457,10 +488,10 @@ class ExactSolver(SolverStrategy):
 
             # RHC 모드일 때, precedence 사전 선언 for buffer (due to zero processing time)
             for i, op_idx in enumerate(processing_vehicles_op):
-                if op_idx not in [0, 2]:
+                if op_idx not in [landing_op_id, gate_op_id]:
                     continue
                 for i_, op_idx_ in enumerate(processing_vehicles_op):
-                    if op_idx_ not in [1, 3]:
+                    if op_idx_ not in [buffer_in_op_id, buffer_out_op_id]:
                         continue
                     for r in range(resource_ind[op_idx + 1][0], resource_ind[op_idx + 1][1]):
                         model.addConstr(x[op_idx + 1, op_idx_, i, i_, r] == 0)
@@ -746,6 +777,8 @@ class RunRHC(SolverStrategy):
         next_current_time = kwargs["next_current_time"]
         past_event_time = 0.0
 
+        resource_ind, landing_op_id, buffer_in_op_id, gate_op_id, buffer_out_op_id, takeoff_op_id = self._setup_resource_indices(instance)
+
         # Create simulator
         simulator = VertiportSimulatorRecedingHorizon(instance, is_numerical_exp)
         is_deadlock = False
@@ -774,11 +807,11 @@ class RunRHC(SolverStrategy):
                             vehicle = waiting_vehicles[i]  # selection logic
                             resource = available_resources[j]  # selection logic
                             if resource.id == planned_resource_assignment[vehicle_original_id[vehicle.id], operation]\
-                                    or (operation in [1, 3] and (round(planned_operation_start_times[vehicle_original_id[vehicle.id], operation + 1], 9)
+                                    or (operation in [buffer_in_op_id, buffer_out_op_id] and (round(planned_operation_start_times[vehicle_original_id[vehicle.id], operation + 1], 9)
                                         == round(planned_operation_start_times[vehicle_original_id[vehicle.id], operation], 9) or round(simulator.current_time, 9) >= round(planned_operation_start_times[vehicle_original_id[vehicle.id], operation + 1], 9))):
                                 if round(simulator.current_time, 9) >= round(planned_operation_start_times[vehicle_original_id[vehicle.id], operation], 9):
 
-                                    if len(resource.log_operation_finish_times) > 0 and operation in [0, 4]:
+                                    if len(resource.log_operation_finish_times) > 0 and operation in [landing_op_id, takeoff_op_id]:
                                         finish = resource.log_operation_finish_times[-1]
                                         pre_v = resource.previous_vehicle_operation[0]
                                         pre_op = resource.previous_vehicle_operation[1]
@@ -803,7 +836,7 @@ class RunRHC(SolverStrategy):
 
                                     if simulator.can_assign_vehicle_to_resource(vehicle.id, resource.id, operation):
                                         simulator.assign_vehicle_to_resource_now(vehicle.id, resource.id, operation)
-                                        if operation in [2, 4]:
+                                        if operation in [gate_op_id, takeoff_op_id]:
                                             simulator.resources[vehicle.log_assigned_resources[-1]].state = ResourceState.IDLE
                                         break_flag = True
                                         break_flag2 = True
@@ -812,7 +845,7 @@ class RunRHC(SolverStrategy):
                                     #     resource.state = ResourceState.SEPARATION_DELAY
                                     elif (event.event_type == EventType.RESOURCE_AVAILABLE or event.event_type == EventType.VEHICLE_ARRIVAL or event.event_type == EventType.OPERATION_COMPLETE) and resource.state == ResourceState.SEPARATION_DELAY:
                                         available_time = 0.0
-                                        if len(resource.log_operation_finish_times) > 0 and operation in [0, 4]:
+                                        if len(resource.log_operation_finish_times) > 0 and operation in [landing_op_id, takeoff_op_id]:
                                             finish = resource.log_operation_finish_times[-1]
                                             pre_v = resource.previous_vehicle_operation[0]
                                             pre_op = resource.previous_vehicle_operation[1]
@@ -829,7 +862,7 @@ class RunRHC(SolverStrategy):
                                 else:
                                     if operation == 0 and event.event_type == EventType.VEHICLE_ARRIVAL:
                                         available_time = 0.0
-                                        if len(resource.log_operation_finish_times) > 0 and operation in [0, 4]:
+                                        if len(resource.log_operation_finish_times) > 0 and operation in [landing_op_id, takeoff_op_id]:
                                             finish = resource.log_operation_finish_times[-1]
                                             pre_v = resource.previous_vehicle_operation[0]
                                             pre_op = resource.previous_vehicle_operation[1]
@@ -846,7 +879,7 @@ class RunRHC(SolverStrategy):
                                         vehicle.state = VehicleState.WAITING_FOR_LANDING
                                     elif event.event_type == EventType.OPERATION_COMPLETE:
                                         available_time = 0.0
-                                        if len(resource.log_operation_finish_times) > 0 and operation in [0, 4]:
+                                        if len(resource.log_operation_finish_times) > 0 and operation in [landing_op_id, takeoff_op_id]:
                                             finish = resource.log_operation_finish_times[-1]
                                             pre_v = resource.previous_vehicle_operation[0]
                                             pre_op = resource.previous_vehicle_operation[1]
